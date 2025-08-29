@@ -3,22 +3,53 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>pill-parse-plan</title>
-    <meta name="description" content="Lovable Generated Project" />
-    <meta name="author" content="Lovable" />
+    <title>Tratamento por Receita - Análise Inteligente de Prescrições</title>
+    <meta name="description" content="Analise receitas médicas automaticamente e gere agenda de medicamentos com IA. Notificações, exportação para calendário e muito mais." />
+    <meta name="author" content="Tratamento por Receita App" />
+    <meta name="keywords" content="receita médica, medicamentos, agenda, tratamento, saúde, IA, OpenAI" />
+    <meta name="theme-color" content="#2563eb" />
 
-    <meta property="og:title" content="pill-parse-plan" />
-    <meta property="og:description" content="Lovable Generated Project" />
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="TratamentoRx" />
+
+    <!-- SEO Meta Tags -->
+    <meta property="og:title" content="Tratamento por Receita - Análise Inteligente" />
+    <meta property="og:description" content="Transforme receitas médicas em agenda organizada. Análise por IA, notificações automáticas e exportação para calendário." />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta property="og:locale" content="pt_BR" />
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@lovable_dev" />
+    <meta name="twitter:title" content="Tratamento por Receita" />
+    <meta name="twitter:description" content="Análise inteligente de prescrições médicas com agenda automática" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://7d524653-ac03-442c-ad32-403b69e82e98.lovableproject.com" />
   </head>
 
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((registration) => {
+              console.log('SW registered: ', registration);
+            })
+            .catch((registrationError) => {
+              console.log('SW registration failed: ', registrationError);
+            });
+        });
+      }
+    </script>
   </body>
 </html>
