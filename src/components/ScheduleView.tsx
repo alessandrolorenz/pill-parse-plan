@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { Calendar, Download, Bell, BellOff, ExternalLink, ArrowLeft } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Download, Bell, BellOff, ExternalLink, ArrowLeft, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
 import { CalendarEvent } from '@/lib/types';
 import { eventsToICS, createGoogleCalendarUrl } from '@/lib/ics';
 import { formatEventForDisplay } from '@/lib/scheduler';
@@ -17,7 +18,43 @@ interface ScheduleViewProps {
 
 export const ScheduleView: React.FC<ScheduleViewProps> = ({ events, onBack }) => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [completedEvents, setCompletedEvents] = useState<Set<string>>(new Set());
   const { toast } = useToast();
+
+  // Carregar eventos marcados do localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('completedMedicationEvents');
+    if (saved) {
+      try {
+        const savedEvents = JSON.parse(saved);
+        setCompletedEvents(new Set(savedEvents));
+      } catch (error) {
+        console.error('Erro ao carregar eventos marcados:', error);
+      }
+    }
+  }, []);
+
+  // Salvar eventos marcados no localStorage
+  const saveCompletedEvents = (newCompletedEvents: Set<string>) => {
+    setCompletedEvents(newCompletedEvents);
+    localStorage.setItem('completedMedicationEvents', JSON.stringify(Array.from(newCompletedEvents)));
+  };
+
+  // Gerar ID único para cada evento
+  const getEventId = (event: CalendarEvent, index: number) => {
+    return `${event.startISO}-${event.title}-${index}`;
+  };
+
+  // Marcar/desmarcar evento como concluído
+  const toggleEventCompletion = (eventId: string) => {
+    const newCompletedEvents = new Set(completedEvents);
+    if (completedEvents.has(eventId)) {
+      newCompletedEvents.delete(eventId);
+    } else {
+      newCompletedEvents.add(eventId);
+    }
+    saveCompletedEvents(newCompletedEvents);
+  };
 
   const handleDownloadICS = () => {
     if (events.length === 0) {
@@ -104,6 +141,11 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ events, onBack }) =>
     .filter(event => new Date(event.startISO) > new Date())
     .slice(0, 5);
 
+  // Calcular progresso
+  const totalEvents = events.length;
+  const completedCount = completedEvents.size;
+  const progressPercentage = totalEvents > 0 ? Math.round((completedCount / totalEvents) * 100) : 0;
+
   return (
     <div className="space-y-6 animate-slide-up">
       {/* Header com botão de voltar */}
@@ -117,23 +159,44 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ events, onBack }) =>
         </h2>
       </div>
 
-      {/* Estatísticas */}
+      {/* Progresso e Estatísticas */}
       <Card className="medical-card">
         <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-            <div>
-              <div className="text-2xl font-bold text-primary">{events.length}</div>
-              <div className="text-sm text-muted-foreground">Total de eventos</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-secondary">{upcomingEvents.length}</div>
-              <div className="text-sm text-muted-foreground">Próximos 5 eventos</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-accent">
-                {Object.keys(eventsByDate).length}
+          <div className="space-y-4">
+            {/* Barra de progresso */}
+            <div className="text-center">
+              <div className="text-3xl font-bold text-primary mb-2">
+                {progressPercentage}%
               </div>
-              <div className="text-sm text-muted-foreground">Dias de tratamento</div>
+              <div className="text-sm text-muted-foreground mb-3">
+                {completedCount} de {totalEvents} doses tomadas
+              </div>
+              <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-primary to-primary-glow transition-all duration-500 ease-out"
+                  style={{ width: `${progressPercentage}%` }}
+                />
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Estatísticas resumidas */}
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <div className="text-lg font-bold text-primary">{events.length}</div>
+                <div className="text-xs text-muted-foreground">Total</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-secondary">{upcomingEvents.length}</div>
+                <div className="text-xs text-muted-foreground">Próximas</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold text-accent">
+                  {Object.keys(eventsByDate).length}
+                </div>
+                <div className="text-xs text-muted-foreground">Dias</div>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -238,22 +301,54 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({ events, onBack }) =>
               <div className="space-y-2">
                 {dayEvents
                   .sort((a, b) => new Date(a.startISO).getTime() - new Date(b.startISO).getTime())
-                  .map((event, index) => (
-                    <div key={index} className="flex items-center justify-between p-2 bg-background rounded border">
-                      <div>
-                        <div className="font-medium text-sm">{event.title}</div>
-                        {event.description && (
-                          <div className="text-xs text-muted-foreground">{event.description}</div>
-                        )}
+                  .map((event, index) => {
+                    const eventId = getEventId(event, events.indexOf(event));
+                    const isCompleted = completedEvents.has(eventId);
+                    
+                    return (
+                      <div 
+                        key={index} 
+                        className={`flex items-center gap-3 p-3 bg-background rounded-lg border transition-all duration-200 ${
+                          isCompleted 
+                            ? 'bg-primary/5 border-primary/20 opacity-75' 
+                            : 'hover:bg-muted/50'
+                        }`}
+                      >
+                        <Checkbox
+                          checked={isCompleted}
+                          onCheckedChange={() => toggleEventCompletion(eventId)}
+                          className="flex-shrink-0"
+                        />
+                        
+                        <div className="flex-1">
+                          <div className={`font-medium text-sm ${
+                            isCompleted ? 'line-through text-muted-foreground' : ''
+                          }`}>
+                            {event.title}
+                          </div>
+                          {event.description && (
+                            <div className={`text-xs ${
+                              isCompleted ? 'text-muted-foreground/70' : 'text-muted-foreground'
+                            }`}>
+                              {event.description}
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          {isCompleted && (
+                            <Check className="h-4 w-4 text-primary" />
+                          )}
+                          <div className="text-sm text-muted-foreground">
+                            {new Date(event.startISO).toLocaleTimeString('pt-BR', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-sm text-muted-foreground">
-                        {new Date(event.startISO).toLocaleTimeString('pt-BR', {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
               </div>
             </CardContent>
           </Card>
