@@ -1,32 +1,45 @@
 import React, { useState, useEffect } from 'react';
-import { Pill, AlertTriangle, Loader2 } from 'lucide-react';
+import { Pill, AlertTriangle, Loader2, Plus, Calendar, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 
 import { ImagePicker } from '@/components/ImagePicker';
 import { PlanReview } from '@/components/PlanReview';
 import { ScheduleView } from '@/components/ScheduleView';
 import { ConfigModal } from '@/components/ConfigModal';
+import { TreatmentCard } from '@/components/TreatmentCard';
 
-import { TreatmentPlan, CalendarEvent, AppConfig } from '@/lib/types';
+import { TreatmentPlan, CalendarEvent, AppConfig, TreatmentRecord } from '@/lib/types';
 import { extractPlanFromImage } from '@/lib/openai';
-import { expandPlanToEvents } from '@/lib/scheduler';
+import { useTreatments } from '@/hooks/useTreatments';
 
-type AppStep = 'upload' | 'review' | 'schedule';
+type AppStep = 'home' | 'upload' | 'review' | 'schedule';
 
 const Index = () => {
-  const [currentStep, setCurrentStep] = useState<AppStep>('upload');
+  const [currentStep, setCurrentStep] = useState<AppStep>('home');
   const [selectedImage, setSelectedImage] = useState<string>('');
   const [userNotes, setUserNotes] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [treatmentPlan, setTreatmentPlan] = useState<TreatmentPlan | null>(null);
   const [startDateTime, setStartDateTime] = useState<Date>(new Date());
-  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [selectedTreatmentId, setSelectedTreatmentId] = useState<string>('');
   const [config, setConfig] = useState<AppConfig>({});
   const { toast } = useToast();
+  
+  const {
+    treatments,
+    addTreatment,
+    updateTreatmentEvents,
+    getTreatment,
+    getActiveTreatments,
+    getCompletedTreatments,
+    getTreatmentProgress,
+    getNextEvent
+  } = useTreatments();
 
   // Carregar configurações do localStorage
   useEffect(() => {
@@ -89,20 +102,20 @@ const Index = () => {
     if (!treatmentPlan) return;
 
     try {
-      const events = expandPlanToEvents(treatmentPlan, startDate);
-      setCalendarEvents(events);
+      const treatmentId = addTreatment(treatmentPlan, startDate);
+      setSelectedTreatmentId(treatmentId);
       setCurrentStep('schedule');
       
       toast({
-        title: 'Agenda gerada!',
-        description: `${events.length} eventos criados para seu tratamento.`,
+        title: 'Tratamento criado!',
+        description: 'Agenda gerada com sucesso.',
         variant: 'default'
       });
     } catch (error) {
-      console.error('Erro ao gerar agenda:', error);
+      console.error('Erro ao criar tratamento:', error);
       toast({
         title: 'Erro na agenda',
-        description: 'Não foi possível gerar os eventos.',
+        description: 'Não foi possível criar o tratamento.',
         variant: 'destructive'
       });
     }
@@ -112,12 +125,27 @@ const Index = () => {
     setSelectedImage('');
     setUserNotes('');
     setTreatmentPlan(null);
-    setCalendarEvents([]);
+    setSelectedTreatmentId('');
     setCurrentStep('upload');
+  };
+
+  const handleBackToHome = () => {
+    handleClearImage();
+    setCurrentStep('home');
   };
 
   const handleBackToReview = () => {
     setCurrentStep('review');
+  };
+
+  const handleViewTreatmentDetails = (treatmentId: string) => {
+    setSelectedTreatmentId(treatmentId);
+    setCurrentStep('schedule');
+  };
+
+  const handleStartNewTreatment = () => {
+    handleClearImage();
+    setCurrentStep('upload');
   };
 
   const hasApiKey = !!(import.meta.env.VITE_OPENAI_API_KEY || config.openaiApiKey);
@@ -171,14 +199,126 @@ const Index = () => {
           </CardContent>
         </Card>
 
+        {/* Step: Home */}
+        {currentStep === 'home' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Meus Tratamentos</h2>
+                <p className="text-muted-foreground">
+                  Gerencie seus tratamentos e acompanhe o progresso
+                </p>
+              </div>
+              <Button
+                variant="medical"
+                size="lg"
+                onClick={handleStartNewTreatment}
+                disabled={!hasApiKey}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Novo Tratamento
+              </Button>
+            </div>
+
+            {!hasApiKey && (
+              <Card className="border-warning">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3 text-warning">
+                    <AlertTriangle className="h-5 w-5" />
+                    <p>Configure sua OpenAI API key nas configurações para criar novos tratamentos.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <Tabs defaultValue="active" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="active" className="flex items-center gap-2">
+                  <Activity className="h-4 w-4" />
+                  Ativos ({getActiveTreatments().length})
+                </TabsTrigger>
+                <TabsTrigger value="completed" className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Concluídos ({getCompletedTreatments().length})
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="active" className="space-y-4">
+                {getActiveTreatments().length === 0 ? (
+                  <Card className="text-center py-12">
+                    <CardContent>
+                      <Pill className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="font-semibold mb-2">Nenhum tratamento ativo</h3>
+                      <p className="text-muted-foreground mb-4">
+                        Crie seu primeiro tratamento enviando uma foto da receita médica.
+                      </p>
+                      <Button 
+                        variant="medical" 
+                        onClick={handleStartNewTreatment}
+                        disabled={!hasApiKey}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Criar Primeiro Tratamento
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {getActiveTreatments().map((treatment) => (
+                      <TreatmentCard
+                        key={treatment.id}
+                        treatment={treatment}
+                        progress={getTreatmentProgress(treatment)}
+                        nextEvent={getNextEvent(treatment)}
+                        onViewDetails={handleViewTreatmentDetails}
+                      />
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="completed" className="space-y-4">
+                {getCompletedTreatments().length === 0 ? (
+                  <Card className="text-center py-12">
+                    <CardContent>
+                      <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="font-semibold mb-2">Nenhum tratamento concluído</h3>
+                      <p className="text-muted-foreground">
+                        Tratamentos finalizados aparecerão aqui.
+                      </p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {getCompletedTreatments().map((treatment) => (
+                      <TreatmentCard
+                        key={treatment.id}
+                        treatment={treatment}
+                        progress={getTreatmentProgress(treatment)}
+                        nextEvent={getNextEvent(treatment)}
+                        onViewDetails={handleViewTreatmentDetails}
+                      />
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
+        )}
+
         {/* Step: Upload */}
         {currentStep === 'upload' && (
           <div className="space-y-6 animate-fade-in">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold mb-2">Carregar Receita Médica</h2>
-              <p className="text-muted-foreground">
-                Tire uma foto ou selecione uma imagem da sua receita para análise automática
-              </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Novo Tratamento</h2>
+                <p className="text-muted-foreground">
+                  Tire uma foto ou selecione uma imagem da sua receita para análise automática
+                </p>
+              </div>
+              <Button variant="outline" onClick={handleBackToHome}>
+                Voltar
+              </Button>
             </div>
 
             <ImagePicker
@@ -235,20 +375,37 @@ const Index = () => {
 
         {/* Step: Review */}
         {currentStep === 'review' && treatmentPlan && (
-          <PlanReview
-            plan={treatmentPlan}
-            onGenerateSchedule={handleGenerateSchedule}
-            startDateTime={startDateTime}
-            onStartDateTimeChange={setStartDateTime}
-          />
+          <div className="space-y-6 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold">Revisar Tratamento</h2>
+              <Button variant="outline" onClick={handleBackToHome}>
+                Voltar ao início
+              </Button>
+            </div>
+            <PlanReview
+              plan={treatmentPlan}
+              onGenerateSchedule={handleGenerateSchedule}
+              startDateTime={startDateTime}
+              onStartDateTimeChange={setStartDateTime}
+            />
+          </div>
         )}
 
         {/* Step: Schedule */}
-        {currentStep === 'schedule' && calendarEvents.length > 0 && (
-          <ScheduleView
-            events={calendarEvents}
-            onBack={handleBackToReview}
-          />
+        {currentStep === 'schedule' && selectedTreatmentId && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold">Agenda do Tratamento</h2>
+              <Button variant="outline" onClick={handleBackToHome}>
+                Voltar ao início
+              </Button>
+            </div>
+            <ScheduleView
+              treatmentId={selectedTreatmentId}
+              onBack={handleBackToHome}
+              onEventsUpdate={updateTreatmentEvents}
+            />
+          </div>
         )}
       </main>
 

@@ -27,6 +27,16 @@ export type CalendarEvent = {
   endISO?: string;         // opcional (mesmo que start + 5 min)
 };
 
+export type TreatmentRecord = {
+  id: string;
+  plan: TreatmentPlan;
+  events: CalendarEvent[];
+  startDateTime: Date;
+  createdAt: Date;
+  status: 'active' | 'completed';
+  completedEvents: Record<string, boolean>; // eventId -> completed
+};
+
 export type AppConfig = {
   openaiApiKey?: string;
 };
