@@ -400,11 +400,10 @@ const Index = () => {
                 Voltar ao início
               </Button>
             </div>
-            <ScheduleView
-              treatmentId={selectedTreatmentId}
-              onBack={handleBackToHome}
-              onEventsUpdate={updateTreatmentEvents}
-            />
+        <ScheduleView 
+          treatmentId={selectedTreatmentId}
+          onBack={handleBackToHome}
+        />
           </div>
         )}
       </main>

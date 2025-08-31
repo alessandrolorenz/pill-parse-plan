@@ -15,13 +15,12 @@ import { useTreatments } from '@/hooks/useTreatments';
 interface ScheduleViewProps {
   treatmentId: string;
   onBack: () => void;
-  onEventsUpdate: (treatmentId: string, completedEvents: Record<string, boolean>) => void;
 }
 
-export function ScheduleView({ treatmentId, onBack, onEventsUpdate }: ScheduleViewProps) {
+export function ScheduleView({ treatmentId, onBack }: ScheduleViewProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const { toast } = useToast();
-  const { getTreatment, getTreatmentProgress } = useTreatments();
+  const { getTreatment, getTreatmentProgress, updateTreatmentEvents } = useTreatments();
   
   const treatment = getTreatment(treatmentId);
   
@@ -45,7 +44,7 @@ export function ScheduleView({ treatmentId, onBack, onEventsUpdate }: ScheduleVi
       [eventKey]: completed
     };
     
-    onEventsUpdate(treatmentId, updatedCompletedEvents);
+    updateTreatmentEvents(treatmentId, updatedCompletedEvents);
     
     toast({
       title: completed ? 'Dose marcada como tomada' : 'Dose desmarcada',
