@@ -4,6 +4,48 @@
 
 **URL**: https://lovable.dev/projects/7d524653-ac03-442c-ad32-403b69e82e98
 
+## ⚠️ Configuração Obrigatória
+
+Este projeto requer uma chave da OpenAI API para funcionar. Siga estes passos:
+
+### 1. Configurar variáveis de ambiente
+
+```sh
+# Copie o arquivo de exemplo
+cp .env.example .env
+
+# Edite o arquivo .env e adicione sua chave da OpenAI
+# OPENAI_API_KEY=sk-sua-chave-aqui
+```
+
+### 2. Obter chave da OpenAI
+
+1. Acesse [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+2. Faça login ou crie uma conta
+3. Clique em "Create new secret key"
+4. Copie a chave gerada
+5. Cole no arquivo `.env`
+
+### 3. Executar o projeto
+
+```sh
+# Instalar dependências
+npm install
+
+# Executar servidor API + frontend (recomendado)
+npm run dev:full
+
+# OU executar separadamente:
+# Terminal 1: npm run server
+# Terminal 2: npm run dev
+```
+
+### 4. Verificar configuração
+
+- Acesse http://localhost:8080
+- Clique no ícone de configurações (⚙️) no canto superior direito
+- Verifique se aparece "✓ Configurada" para OpenAI API
+
 ## How can I edit this code?
 
 There are several ways of editing your application.
@@ -32,8 +74,12 @@ cd <YOUR_PROJECT_NAME>
 # Step 3: Install the necessary dependencies.
 npm i
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+# Step 4: Configure environment variables
+cp .env.example .env
+# Edit .env and add your OPENAI_API_KEY
+
+# Step 5: Start both API server and frontend
+npm run dev:full
 ```
 
 **Edit a file directly in GitHub**
@@ -59,6 +105,16 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+- Express.js (API server)
+- OpenAI API (image analysis)
+
+## Security Features
+
+- ✅ OpenAI API key nunca exposta ao cliente
+- ✅ Todas as chamadas à OpenAI via proxy server-side
+- ✅ Chaves armazenadas apenas em variáveis de ambiente
+- ✅ Validação de entrada no servidor
+- ✅ Tratamento de erros robusto
 
 ## How can I deploy this project?
 
