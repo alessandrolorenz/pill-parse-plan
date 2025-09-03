@@ -60,13 +60,17 @@ const Index = () => {
 
   const checkServerConfiguration = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('openai-status');
+      const { data, error } = await supabase.functions.invoke('openai-status', {
+        body: {}
+      });
       if (!error && data) {
         setServerConfigured(data.configured);
       } else {
+        console.error('Error checking server config:', error);
         setServerConfigured(false);
       }
     } catch (error) {
+      console.error('Exception checking server config:', error);
       setServerConfigured(false);
     }
   };

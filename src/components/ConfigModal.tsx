@@ -24,13 +24,17 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ config, onConfigChange
 
   const checkServerConfiguration = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('openai-status');
+      const { data, error } = await supabase.functions.invoke('openai-status', {
+        body: {}
+      });
       if (!error && data) {
         setServerStatus(data.configured ? 'configured' : 'missing');
       } else {
+        console.error('Error checking server config:', error);
         setServerStatus('missing');
       }
     } catch (error) {
+      console.error('Exception checking server config:', error);
       setServerStatus('missing');
     }
   };
