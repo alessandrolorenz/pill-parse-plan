@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { AppConfig } from '@/lib/types';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ConfigModalProps {
   config: AppConfig;
@@ -23,9 +24,8 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ config, onConfigChange
 
   const checkServerConfiguration = async () => {
     try {
-      const response = await fetch('/api/functions/v1/openai-status');
-      if (response.ok) {
-        const data = await response.json();
+      const { data, error } = await supabase.functions.invoke('openai-status');
+      if (!error && data) {
         setServerStatus(data.configured ? 'configured' : 'missing');
       } else {
         setServerStatus('missing');

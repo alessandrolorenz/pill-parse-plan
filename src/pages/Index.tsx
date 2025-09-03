@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 import { ImagePicker } from '@/components/ImagePicker';
 import { PlanReview } from '@/components/PlanReview';
@@ -59,9 +60,8 @@ const Index = () => {
 
   const checkServerConfiguration = async () => {
     try {
-      const response = await fetch('/api/openai/status');
-      if (response.ok) {
-        const data = await response.json();
+      const { data, error } = await supabase.functions.invoke('openai-status');
+      if (!error && data) {
         setServerConfigured(data.configured);
       } else {
         setServerConfigured(false);

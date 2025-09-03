@@ -1,27 +1,23 @@
 import { TreatmentPlan } from './types';
+import { supabase } from '@/integrations/supabase/client';
 
 export async function extractPlanFromImage(
   imageBase64: string, 
   userNotes?: string
 ): Promise<TreatmentPlan> {
   try {
-    const response = await fetch('/api/functions/v1/analyze-prescription', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    const { data, error } = await supabase.functions.invoke('analyze-prescription', {
+      body: {
         imageBase64,
         userNotes
-      })
+      }
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+    if (error) {
+      throw new Error(error.message || 'Erro ao chamar a função do Supabase');
     }
 
-    const treatmentPlan: TreatmentPlan = await response.json();
+    const treatmentPlan: TreatmentPlan = data;
     
     // Validar estrutura básica
     if (!treatmentPlan.planTitle || !treatmentPlan.summary || !Array.isArray(treatmentPlan.items)) {
