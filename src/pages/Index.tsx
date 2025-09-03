@@ -28,6 +28,7 @@ const Index = () => {
   const [startDateTime, setStartDateTime] = useState<Date>(new Date());
   const [selectedTreatmentId, setSelectedTreatmentId] = useState<string>('');
   const [config, setConfig] = useState<AppConfig>({});
+  const [serverConfigured, setServerConfigured] = useState<boolean>(false);
   const { toast } = useToast();
   
   const {
@@ -51,12 +52,31 @@ const Index = () => {
         console.error('Erro ao carregar configurações:', error);
       }
     }
+    
+    // Verificar se o servidor está configurado
+    checkServerConfiguration();
   }, []);
+
+  const checkServerConfiguration = async () => {
+    try {
+      const response = await fetch('/api/openai/status');
+      if (response.ok) {
+        const data = await response.json();
+        setServerConfigured(data.configured);
+      } else {
+        setServerConfigured(false);
+      }
+    } catch (error) {
+      setServerConfigured(false);
+    }
+  };
 
   // Salvar configurações no localStorage
   const handleConfigChange = (newConfig: AppConfig) => {
     setConfig(newConfig);
     localStorage.setItem('medicationAppConfig', JSON.stringify(newConfig));
+    // Verificar novamente o status do servidor
+    checkServerConfiguration();
   };
 
   const handleAnalyzeImage = async () => {
@@ -74,8 +94,7 @@ const Index = () => {
     try {
       const plan = await extractPlanFromImage(
         selectedImage, 
-        userNotes || undefined,
-        config.openaiApiKey
+        userNotes || undefined
       );
       
       setTreatmentPlan(plan);
@@ -148,7 +167,6 @@ const Index = () => {
     setCurrentStep('upload');
   };
 
-  const hasApiKey = !!(import.meta.env.VITE_OPENAI_API_KEY || config.openaiApiKey);
 
   return (
     <div className="min-h-screen bg-background">
@@ -171,8 +189,8 @@ const Index = () => {
             </div>
             
             <div className="flex items-center gap-2">
-              {!hasApiKey && (
-                <Badge variant="warning">API Key necessária</Badge>
+              {!serverConfigured && (
+                <Badge variant="warning">Servidor não configurado</Badge>
               )}
               <ConfigModal config={config} onConfigChange={handleConfigChange} />
             </div>
@@ -213,19 +231,19 @@ const Index = () => {
                 variant="medical"
                 size="lg"
                 onClick={handleStartNewTreatment}
-                disabled={!hasApiKey}
+                disabled={!serverConfigured}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Novo Tratamento
               </Button>
             </div>
 
-            {!hasApiKey && (
+            {!serverConfigured && (
               <Card className="border-warning">
                 <CardContent className="pt-6">
                   <div className="flex items-center gap-3 text-warning">
                     <AlertTriangle className="h-5 w-5" />
-                    <p>Configure sua OpenAI API key nas configurações para criar novos tratamentos.</p>
+                    <p>Configure OPENAI_API_KEY no servidor para criar novos tratamentos.</p>
                   </div>
                 </CardContent>
               </Card>
@@ -255,7 +273,7 @@ const Index = () => {
                       <Button 
                         variant="medical" 
                         onClick={handleStartNewTreatment}
-                        disabled={!hasApiKey}
+                        disabled={!serverConfigured}
                       >
                         <Plus className="h-4 w-4 mr-2" />
                         Criar Primeiro Tratamento
@@ -350,7 +368,7 @@ const Index = () => {
                   size="lg"
                   variant="medical"
                   onClick={handleAnalyzeImage}
-                  disabled={isAnalyzing || !hasApiKey}
+                  disabled={isAnalyzing || !serverConfigured}
                   className="w-full md:w-auto"
                 >
                   {isAnalyzing ? (
@@ -363,9 +381,9 @@ const Index = () => {
                   )}
                 </Button>
                 
-                {!hasApiKey && (
+                {!serverConfigured && (
                   <p className="text-sm text-muted-foreground mt-2">
-                    Configure sua OpenAI API key nas configurações para continuar
+                    Configure OPENAI_API_KEY no servidor para continuar
                   </p>
                 )}
               </div>

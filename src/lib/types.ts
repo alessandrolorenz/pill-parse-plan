@@ -38,5 +38,5 @@ export type TreatmentRecord = {
 };
 
 export type AppConfig = {
-  openaiApiKey?: string;
+  // Configuration moved to server-side only
 };
