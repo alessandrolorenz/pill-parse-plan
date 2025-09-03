@@ -23,7 +23,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ config, onConfigChange
 
   const checkServerConfiguration = async () => {
     try {
-      const response = await fetch('/api/openai/status');
+      const response = await fetch('/api/functions/v1/openai-status');
       if (response.ok) {
         const data = await response.json();
         setServerStatus(data.configured ? 'configured' : 'missing');

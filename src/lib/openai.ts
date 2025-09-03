@@ -5,7 +5,7 @@ export async function extractPlanFromImage(
   userNotes?: string
 ): Promise<TreatmentPlan> {
   try {
-    const response = await fetch('/api/openai/analyze-prescription', {
+    const response = await fetch('/api/functions/v1/analyze-prescription', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
