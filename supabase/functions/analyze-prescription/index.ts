@@ -110,8 +110,12 @@ serve(async (req) => {
     })
 
     if (!response.ok) {
-      const errorData = await response.json()
-      console.error('OpenAI API error:', errorData)
+      const errorData = await response.json().catch(() => ({}))
+      console.error('OpenAI API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorData
+      })
       
       if (response.status === 402) {
         return new Response(
@@ -119,7 +123,7 @@ serve(async (req) => {
             error: 'Cota da OpenAI esgotada. Verifique seu plano na OpenAI.' 
           }),
           { 
-            status: 402, 
+            status: 400, 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           }
         )
@@ -128,16 +132,24 @@ serve(async (req) => {
       if (response.status === 401) {
         return new Response(
           JSON.stringify({ 
-            error: 'Chave da OpenAI inválida. Verifique a configuração do servidor.' 
+            error: 'Chave da OpenAI inválida ou expirada. Configure uma nova chave de API válida.' 
           }),
           { 
-            status: 401, 
+            status: 400, 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           }
         )
       }
 
-      throw new Error(`OpenAI API error: ${response.status}`)
+      return new Response(
+        JSON.stringify({ 
+          error: `Erro da OpenAI API (${response.status}): ${errorData.error?.message || response.statusText}` 
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
     }
 
     const data = await response.json()
