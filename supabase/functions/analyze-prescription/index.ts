@@ -43,6 +43,7 @@ serve(async (req) => {
   }
 
   try {
+    console.log('Starting prescription analysis...')
     const { imageBase64, userNotes } = await req.json()
 
     if (!imageBase64) {
@@ -94,6 +95,7 @@ serve(async (req) => {
       }
     ]
 
+    console.log('Calling OpenAI with model gpt-4o and prompt length:', userNotes?.length || 0)
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -173,7 +175,11 @@ serve(async (req) => {
       }
     )
   } catch (error) {
-    console.error('Erro ao processar receita:', error)
+    console.error('Erro completo ao processar receita:', {
+      error: error.message,
+      stack: error.stack,
+      name: error.name
+    })
 
     return new Response(
       JSON.stringify({ 
