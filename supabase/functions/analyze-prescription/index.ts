@@ -97,7 +97,7 @@ serve(async (req) => {
 
     console.log('OpenAI API Key present:', !!openaiKey)
     console.log('OpenAI API Key length:', openaiKey?.length)
-    console.log('Calling OpenAI with model gpt-5-2025-08-07 and prompt length:', userNotes?.length || 0)
+    console.log('Calling OpenAI with model gpt-4.1-2025-04-14 and prompt length:', userNotes?.length || 0)
     
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -106,10 +106,11 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: "gpt-5-2025-08-07",
+        model: "gpt-4.1-2025-04-14",
         messages,
         response_format: { type: "json_object" },
-        max_completion_tokens: 1500
+        max_tokens: 1500,
+        temperature: 0.1
       })
     })
 
