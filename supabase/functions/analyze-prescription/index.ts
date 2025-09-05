@@ -95,7 +95,10 @@ serve(async (req) => {
       }
     ]
 
-    console.log('Calling OpenAI with model gpt-4o and prompt length:', userNotes?.length || 0)
+    console.log('OpenAI API Key present:', !!openaiKey)
+    console.log('OpenAI API Key length:', openaiKey?.length)
+    console.log('Calling OpenAI with model gpt-5-2025-08-07 and prompt length:', userNotes?.length || 0)
+    
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -103,11 +106,10 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: "gpt-5-2025-08-07",
         messages,
         response_format: { type: "json_object" },
-        max_tokens: 1500,
-        temperature: 0.1
+        max_completion_tokens: 1500
       })
     })
 
