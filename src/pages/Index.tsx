@@ -1,26 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { Pill, AlertTriangle, Loader2, Plus, Calendar, Activity } from 'lucide-react';
+import { Pill, AlertTriangle, Loader2, Plus, Calendar, Activity, LogOut, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 import { ImagePicker } from '@/components/ImagePicker';
 import { PlanReview } from '@/components/PlanReview';
-import { ScheduleView } from '@/components/ScheduleView';
-import { ConfigModal } from '@/components/ConfigModal';
+import { SupabaseScheduleView } from '@/components/SupabaseScheduleView';
 import { TreatmentCard } from '@/components/TreatmentCard';
 
-import { TreatmentPlan, CalendarEvent, AppConfig, TreatmentRecord } from '@/lib/types';
+import { TreatmentPlan, AppConfig } from '@/lib/types';
 import { extractPlanFromImage } from '@/lib/openai';
-import { useTreatments } from '@/hooks/useTreatments';
+import { useSupabaseTreatments } from '@/hooks/useSupabaseTreatments';
 
 type AppStep = 'home' | 'upload' | 'review' | 'schedule';
 
 const Index = () => {
+  const { user, signOut, loading } = useAuth();
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<AppStep>('home');
   const [selectedImage, setSelectedImage] = useState<string>('');
   const [userNotes, setUserNotes] = useState<string>('');
@@ -28,60 +30,25 @@ const Index = () => {
   const [treatmentPlan, setTreatmentPlan] = useState<TreatmentPlan | null>(null);
   const [startDateTime, setStartDateTime] = useState<Date>(new Date());
   const [selectedTreatmentId, setSelectedTreatmentId] = useState<string>('');
-  const [config, setConfig] = useState<AppConfig>({});
-  const [serverConfigured, setServerConfigured] = useState<boolean>(false);
+  const [serverConfigured, setServerConfigured] = useState<boolean>(true);
+  const [imagePath, setImagePath] = useState<string>('');
   const { toast } = useToast();
   
   const {
     treatments,
+    loading: treatmentsLoading,
     addTreatment,
-    updateTreatmentEvents,
-    getTreatment,
     getActiveTreatments,
-    getCompletedTreatments,
-    getTreatmentProgress,
-    getNextEvent
-  } = useTreatments();
+    getArchivedTreatments,
+    uploadPrescriptionImage
+  } = useSupabaseTreatments();
 
-  // Carregar configurações do localStorage
+  // Verificar autenticação
   useEffect(() => {
-    const savedConfig = localStorage.getItem('medicationAppConfig');
-    if (savedConfig) {
-      try {
-        setConfig(JSON.parse(savedConfig));
-      } catch (error) {
-        console.error('Erro ao carregar configurações:', error);
-      }
+    if (!loading && !user) {
+      navigate('/auth');
     }
-    
-    // Verificar se o servidor está configurado
-    checkServerConfiguration();
-  }, []);
-
-  const checkServerConfiguration = async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('openai-status', {
-        body: {}
-      });
-      if (!error && data) {
-        setServerConfigured(data.configured);
-      } else {
-        console.error('Error checking server config:', error);
-        setServerConfigured(false);
-      }
-    } catch (error) {
-      console.error('Exception checking server config:', error);
-      setServerConfigured(false);
-    }
-  };
-
-  // Salvar configurações no localStorage
-  const handleConfigChange = (newConfig: AppConfig) => {
-    setConfig(newConfig);
-    localStorage.setItem('medicationAppConfig', JSON.stringify(newConfig));
-    // Verificar novamente o status do servidor
-    checkServerConfiguration();
-  };
+  }, [user, loading, navigate]);
 
   const handleAnalyzeImage = async () => {
     if (!selectedImage) {
@@ -96,6 +63,15 @@ const Index = () => {
     setIsAnalyzing(true);
     
     try {
+      // Upload da imagem primeiro
+      const imageFile = await fetch(selectedImage).then(r => r.blob());
+      const file = new File([imageFile], 'prescription.jpg', { type: 'image/jpeg' });
+      const uploadedPath = await uploadPrescriptionImage(file);
+      
+      if (uploadedPath) {
+        setImagePath(uploadedPath);
+      }
+
       const plan = await extractPlanFromImage(
         selectedImage, 
         userNotes || undefined
@@ -121,19 +97,23 @@ const Index = () => {
     }
   };
 
-  const handleGenerateSchedule = (startDate: Date) => {
+  const handleGenerateSchedule = async (startDate: Date) => {
     if (!treatmentPlan) return;
 
     try {
-      const treatmentId = addTreatment(treatmentPlan, startDate);
-      setSelectedTreatmentId(treatmentId);
-      setCurrentStep('schedule');
-      
-      toast({
-        title: 'Tratamento criado!',
-        description: 'Agenda gerada com sucesso.',
-        variant: 'default'
-      });
+      const treatmentId = await addTreatment(treatmentPlan, startDate, imagePath);
+      if (treatmentId) {
+        setSelectedTreatmentId(treatmentId);
+        setCurrentStep('schedule');
+        
+        toast({
+          title: 'Tratamento criado!',
+          description: 'Agenda gerada com sucesso.',
+          variant: 'default'
+        });
+      } else {
+        throw new Error('Falha ao criar tratamento');
+      }
     } catch (error) {
       console.error('Erro ao criar tratamento:', error);
       toast({
@@ -149,16 +129,13 @@ const Index = () => {
     setUserNotes('');
     setTreatmentPlan(null);
     setSelectedTreatmentId('');
+    setImagePath('');
     setCurrentStep('upload');
   };
 
   const handleBackToHome = () => {
     handleClearImage();
     setCurrentStep('home');
-  };
-
-  const handleBackToReview = () => {
-    setCurrentStep('review');
   };
 
   const handleViewTreatmentDetails = (treatmentId: string) => {
@@ -170,6 +147,23 @@ const Index = () => {
     handleClearImage();
     setCurrentStep('upload');
   };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/auth');
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
 
   return (
@@ -193,10 +187,13 @@ const Index = () => {
             </div>
             
             <div className="flex items-center gap-2">
-              {!serverConfigured && (
-                <Badge variant="warning">Servidor não configurado</Badge>
-              )}
-              <ConfigModal config={config} onConfigChange={handleConfigChange} />
+              <Button variant="ghost" size="sm" onClick={() => navigate('/profile')}>
+                <User className="h-4 w-4 mr-2" />
+                Perfil
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleSignOut}>
+                <LogOut className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
@@ -232,26 +229,15 @@ const Index = () => {
                 </p>
               </div>
               <Button
-                variant="medical"
+                variant="default"
                 size="lg"
                 onClick={handleStartNewTreatment}
-                disabled={!serverConfigured}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Novo Tratamento
               </Button>
             </div>
 
-            {!serverConfigured && (
-              <Card className="border-warning">
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-3 text-warning">
-                    <AlertTriangle className="h-5 w-5" />
-                    <p>Configure OPENAI_API_KEY no servidor para criar novos tratamentos.</p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
 
             <Tabs defaultValue="active" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
@@ -261,12 +247,16 @@ const Index = () => {
                 </TabsTrigger>
                 <TabsTrigger value="completed" className="flex items-center gap-2">
                   <Calendar className="h-4 w-4" />
-                  Concluídos ({getCompletedTreatments().length})
+                  Arquivados ({getArchivedTreatments().length})
                 </TabsTrigger>
               </TabsList>
 
               <TabsContent value="active" className="space-y-4">
-                {getActiveTreatments().length === 0 ? (
+                {treatmentsLoading ? (
+                  <div className="text-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+                  </div>
+                ) : getActiveTreatments().length === 0 ? (
                   <Card className="text-center py-12">
                     <CardContent>
                       <Pill className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -275,9 +265,8 @@ const Index = () => {
                         Crie seu primeiro tratamento enviando uma foto da receita médica.
                       </p>
                       <Button 
-                        variant="medical" 
+                        variant="default" 
                         onClick={handleStartNewTreatment}
-                        disabled={!serverConfigured}
                       >
                         <Plus className="h-4 w-4 mr-2" />
                         Criar Primeiro Tratamento
@@ -287,39 +276,53 @@ const Index = () => {
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2">
                     {getActiveTreatments().map((treatment) => (
-                      <TreatmentCard
-                        key={treatment.id}
-                        treatment={treatment}
-                        progress={getTreatmentProgress(treatment)}
-                        nextEvent={getNextEvent(treatment)}
-                        onViewDetails={handleViewTreatmentDetails}
-                      />
+                      <Card key={treatment.id} className="p-4">
+                        <CardContent className="p-0">
+                          <h3 className="font-semibold">{treatment.title}</h3>
+                          <p className="text-sm text-muted-foreground">{treatment.notes}</p>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="mt-2"
+                            onClick={() => handleViewTreatmentDetails(treatment.id)}
+                          >
+                            Ver agenda
+                          </Button>
+                        </CardContent>
+                      </Card>
                     ))}
                   </div>
                 )}
               </TabsContent>
 
               <TabsContent value="completed" className="space-y-4">
-                {getCompletedTreatments().length === 0 ? (
+                {getArchivedTreatments().length === 0 ? (
                   <Card className="text-center py-12">
                     <CardContent>
                       <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="font-semibold mb-2">Nenhum tratamento concluído</h3>
+                      <h3 className="font-semibold mb-2">Nenhum tratamento arquivado</h3>
                       <p className="text-muted-foreground">
-                        Tratamentos finalizados aparecerão aqui.
+                        Tratamentos arquivados aparecerão aqui.
                       </p>
                     </CardContent>
                   </Card>
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2">
-                    {getCompletedTreatments().map((treatment) => (
-                      <TreatmentCard
-                        key={treatment.id}
-                        treatment={treatment}
-                        progress={getTreatmentProgress(treatment)}
-                        nextEvent={getNextEvent(treatment)}
-                        onViewDetails={handleViewTreatmentDetails}
-                      />
+                    {getArchivedTreatments().map((treatment) => (
+                      <Card key={treatment.id} className="p-4">
+                        <CardContent className="p-0">
+                          <h3 className="font-semibold">{treatment.title}</h3>
+                          <p className="text-sm text-muted-foreground">{treatment.notes}</p>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="mt-2"
+                            onClick={() => handleViewTreatmentDetails(treatment.id)}
+                          >
+                            Ver agenda
+                          </Button>
+                        </CardContent>
+                      </Card>
                     ))}
                   </div>
                 )}
@@ -370,9 +373,9 @@ const Index = () => {
               <div className="text-center">
                 <Button
                   size="lg"
-                  variant="medical"
+                  variant="default"
                   onClick={handleAnalyzeImage}
-                  disabled={isAnalyzing || !serverConfigured}
+                  disabled={isAnalyzing}
                   className="w-full md:w-auto"
                 >
                   {isAnalyzing ? (
@@ -384,12 +387,6 @@ const Index = () => {
                     'Analisar Receita'
                   )}
                 </Button>
-                
-                {!serverConfigured && (
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Configure OPENAI_API_KEY no servidor para continuar
-                  </p>
-                )}
               </div>
             )}
           </div>
@@ -422,7 +419,7 @@ const Index = () => {
                 Voltar ao início
               </Button>
             </div>
-        <ScheduleView 
+        <SupabaseScheduleView 
           treatmentId={selectedTreatmentId}
           onBack={handleBackToHome}
         />
