@@ -14,7 +14,110 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      events: {
+        Row: {
+          created_at: string | null
+          date: string
+          done: boolean | null
+          id: string
+          label: string
+          time: string
+          treatment_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          date: string
+          done?: boolean | null
+          id?: string
+          label: string
+          time: string
+          treatment_id: string
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          done?: boolean | null
+          id?: string
+          label?: string
+          time?: string
+          treatment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_treatment_id_fkey"
+            columns: ["treatment_id"]
+            isOneToOne: false
+            referencedRelation: "treatments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      treatments: {
+        Row: {
+          created_at: string | null
+          id: string
+          image_path: string | null
+          notes: string | null
+          status: string | null
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          image_path?: string | null
+          notes?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          image_path?: string | null
+          notes?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      users: {
+        Row: {
+          active_subscription: boolean | null
+          created_at: string | null
+          email: string | null
+          id: string
+          name: string | null
+          provider: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          active_subscription?: boolean | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string | null
+          provider?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          active_subscription?: boolean | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string | null
+          provider?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
