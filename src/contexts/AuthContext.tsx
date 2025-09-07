@@ -41,14 +41,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
+    console.log('Tentando fazer login com:', email);
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+    if (error) {
+      console.error('Erro no login:', error);
+    }
     return { error };
   };
 
   const signUp = async (email: string, password: string, name?: string) => {
+    console.log('Tentando criar conta para:', email);
     const redirectUrl = `${window.location.origin}/`;
     
     const { error } = await supabase.auth.signUp({
@@ -59,16 +64,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         data: name ? { name } : undefined
       }
     });
+    if (error) {
+      console.error('Erro no cadastro:', error);
+    }
     return { error };
   };
 
   const signInWithGoogle = async () => {
+    console.log('Tentando login com Google');
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/`
       }
     });
+    if (error) {
+      console.error('Erro no login Google:', error);
+    }
     return { error };
   };
 
