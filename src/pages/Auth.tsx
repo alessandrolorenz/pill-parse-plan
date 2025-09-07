@@ -14,6 +14,21 @@ export default function Auth() {
   const { user, signIn, signUp, signInWithGoogle, resetPassword } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Test Supabase connection on component mount
+  useEffect(() => {
+    import('@/integrations/supabase/client').then(({ supabase }) => {
+      console.log('Testando conexão Supabase...');
+      supabase.from('treatments').select('count', { count: 'exact', head: true })
+        .then(({ error, count }) => {
+          if (error) {
+            console.error('Erro de conexão Supabase:', error);
+          } else {
+            console.log('Conexão Supabase OK, tabelas acessíveis');
+          }
+        });
+    });
+  }, []);
   
   const [loading, setLoading] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
