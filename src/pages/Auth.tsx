@@ -66,24 +66,28 @@ export default function Auth() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Iniciando cadastro...');
     setLoading(true);
 
     try {
       const { error } = await signUp(formData.email, formData.password, formData.name);
       
       if (error) {
+        console.error('Erro detalhado no cadastro:', error);
         toast({
           title: "Erro no cadastro",
-          description: error.message,
+          description: `${error.message} (${error.status || 'desconhecido'})`,
           variant: "destructive"
         });
       } else {
+        console.log('Cadastro realizado com sucesso');
         toast({
           title: "Cadastro realizado!",
           description: "Verifique seu email para confirmar a conta."
         });
       }
     } catch (error) {
+      console.error('Erro inesperado no cadastro:', error);
       toast({
         title: "Erro no cadastro",
         description: "Ocorreu um erro inesperado.",
