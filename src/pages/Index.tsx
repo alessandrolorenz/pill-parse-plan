@@ -63,9 +63,31 @@ const Index = () => {
     setIsAnalyzing(true);
     
     try {
-      // Converter base64 para blob diretamente
+      // Validar formato da imagem base64
+      if (!selectedImage.includes(',')) {
+        throw new Error('Formato de imagem inválido');
+      }
+      
       const base64Data = selectedImage.split(',')[1];
-      const imageBlob = new Blob([Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))], { type: 'image/jpeg' });
+      
+      if (!base64Data) {
+        throw new Error('Dados da imagem não encontrados');
+      }
+
+      // Converter base64 para blob de forma mais robusta
+      let imageBlob: Blob;
+      try {
+        const binaryString = atob(base64Data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        imageBlob = new Blob([bytes], { type: 'image/jpeg' });
+      } catch (decodeError) {
+        console.error('Erro ao decodificar base64:', decodeError);
+        throw new Error('Erro ao processar a imagem selecionada');
+      }
+
       const file = new File([imageBlob], 'prescription.jpg', { type: 'image/jpeg' });
       const uploadedPath = await uploadPrescriptionImage(file);
       
