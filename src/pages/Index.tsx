@@ -63,21 +63,15 @@ const Index = () => {
     setIsAnalyzing(true);
     
     try {
-      // Validar formato da imagem base64
-      if (!selectedImage.includes(',')) {
-        throw new Error('Formato de imagem inválido');
-      }
-      
-      const base64Data = selectedImage.split(',')[1];
-      
-      if (!base64Data) {
-        throw new Error('Dados da imagem não encontrados');
+      // O selectedImage já é apenas o base64 (sem prefixo data:image...)
+      if (!selectedImage) {
+        throw new Error('Imagem não selecionada');
       }
 
       // Converter base64 para blob de forma mais robusta
       let imageBlob: Blob;
       try {
-        const binaryString = atob(base64Data);
+        const binaryString = atob(selectedImage);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
           bytes[i] = binaryString.charCodeAt(i);
@@ -96,7 +90,7 @@ const Index = () => {
       }
 
       const plan = await extractPlanFromImage(
-        base64Data, 
+        selectedImage, 
         userNotes || undefined
       );
       
