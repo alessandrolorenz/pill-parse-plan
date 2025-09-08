@@ -63,9 +63,10 @@ const Index = () => {
     setIsAnalyzing(true);
     
     try {
-      // Upload da imagem primeiro
-      const imageFile = await fetch(selectedImage).then(r => r.blob());
-      const file = new File([imageFile], 'prescription.jpg', { type: 'image/jpeg' });
+      // Converter base64 para blob diretamente
+      const base64Data = selectedImage.split(',')[1];
+      const imageBlob = new Blob([Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))], { type: 'image/jpeg' });
+      const file = new File([imageBlob], 'prescription.jpg', { type: 'image/jpeg' });
       const uploadedPath = await uploadPrescriptionImage(file);
       
       if (uploadedPath) {
@@ -73,7 +74,7 @@ const Index = () => {
       }
 
       const plan = await extractPlanFromImage(
-        selectedImage, 
+        base64Data, 
         userNotes || undefined
       );
       
