@@ -199,7 +199,7 @@ export default function Profile() {
                     <h3 className="font-semibold mb-2">Plano Gratuito</h3>
                     <div className="text-sm text-muted-foreground mb-4">
                       <ul className="space-y-1">
-                        <li>• Até 3 tratamentos por mês</li>
+                        <li>• Até 1 tratamentos para avaliação</li>
                         <li>• Análise básica de receitas</li>
                         <li>• Armazenamento local</li>
                       </ul>
@@ -219,7 +219,7 @@ export default function Profile() {
                       className="w-full"
                     >
                       <Crown className="h-4 w-4 mr-2" />
-                      Ativar Premium - R$ 9,90/mês
+                      Ativar Premium - R$ 2,90/mês
                     </Button>
                   </div>
                 </div>
