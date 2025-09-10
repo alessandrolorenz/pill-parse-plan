@@ -8,6 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useManagedTreatments } from '@/hooks/useManagedTreatments';
+import { usePlan } from '@/contexts/PlanContext';
+import { PlanRestrictionModal } from '@/components/PlanRestrictionModal';
 
 import { ImagePicker } from '@/components/ImagePicker';
 import { PlanReview } from '@/components/PlanReview';
@@ -16,12 +19,12 @@ import { TreatmentCard } from '@/components/TreatmentCard';
 
 import { TreatmentPlan, AppConfig } from '@/lib/types';
 import { extractPlanFromImage } from '@/lib/openai';
-import { useSupabaseTreatments } from '@/hooks/useSupabaseTreatments';
 
 type AppStep = 'home' | 'upload' | 'review' | 'schedule';
 
 const Index = () => {
   const { user, signOut, loading } = useAuth();
+  const { isPremium } = usePlan();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<AppStep>('home');
   const [selectedImage, setSelectedImage] = useState<string>('');
@@ -32,16 +35,13 @@ const Index = () => {
   const [selectedTreatmentId, setSelectedTreatmentId] = useState<string>('');
   const [serverConfigured, setServerConfigured] = useState<boolean>(true);
   const [imagePath, setImagePath] = useState<string>('');
+  const [restrictionModal, setRestrictionModal] = useState<{
+    open: boolean;
+    type: 'maxTreatments' | 'advancedAnalysis' | 'cloudStorage';
+  }>({ open: false, type: 'maxTreatments' });
   const { toast } = useToast();
   
-  const {
-    treatments,
-    loading: treatmentsLoading,
-    addTreatment,
-    getActiveTreatments,
-    getArchivedTreatments,
-    uploadPrescriptionImage
-  } = useSupabaseTreatments();
+  const treatmentData = useManagedTreatments();
 
   // Verificar autenticação
   useEffect(() => {
@@ -57,6 +57,12 @@ const Index = () => {
         description: 'Por favor, selecione uma imagem da receita.',
         variant: 'destructive'
       });
+      return;
+    }
+
+    // Check if user can use advanced analysis
+    if (!treatmentData.canUseAdvancedAnalysis()) {
+      setRestrictionModal({ open: true, type: 'advancedAnalysis' });
       return;
     }
 
@@ -83,10 +89,13 @@ const Index = () => {
       }
 
       const file = new File([imageBlob], 'prescription.jpg', { type: 'image/jpeg' });
-      const uploadedPath = await uploadPrescriptionImage(file);
       
-      if (uploadedPath) {
-        setImagePath(uploadedPath);
+      // Upload only if premium (cloud storage)
+      if (treatmentData.useCloud && treatmentData.uploadPrescriptionImage) {
+        const uploadedPath = await treatmentData.uploadPrescriptionImage(file);
+        if (uploadedPath) {
+          setImagePath(uploadedPath);
+        }
       }
 
       const plan = await extractPlanFromImage(
@@ -118,14 +127,14 @@ const Index = () => {
     if (!treatmentPlan) return;
 
     try {
-      const treatmentId = await addTreatment(treatmentPlan, startDate, imagePath);
+      const treatmentId = await treatmentData.addTreatment(treatmentPlan, startDate, imagePath);
       if (treatmentId) {
         setSelectedTreatmentId(treatmentId);
         setCurrentStep('schedule');
         
         toast({
           title: 'Tratamento criado!',
-          description: 'Agenda gerada com sucesso.',
+          description: `Dados salvos ${treatmentData.useCloud ? 'na nuvem' : 'localmente'}.`,
           variant: 'default'
         });
       } else {
@@ -133,11 +142,16 @@ const Index = () => {
       }
     } catch (error) {
       console.error('Erro ao criar tratamento:', error);
-      toast({
-        title: 'Erro na agenda',
-        description: 'Não foi possível criar o tratamento.',
-        variant: 'destructive'
-      });
+      
+      if (error instanceof Error && error.message.includes('limite')) {
+        setRestrictionModal({ open: true, type: 'maxTreatments' });
+      } else {
+        toast({
+          title: 'Erro na agenda',
+          description: 'Não foi possível criar o tratamento.',
+          variant: 'destructive'
+        });
+      }
     }
   };
 
@@ -161,6 +175,13 @@ const Index = () => {
   };
 
   const handleStartNewTreatment = () => {
+    // Check treatment limits before allowing new treatment
+    const restriction = treatmentData.checkTreatmentRestriction();
+    if (!restriction.canAddTreatment) {
+      setRestrictionModal({ open: true, type: 'maxTreatments' });
+      return;
+    }
+
     handleClearImage();
     setCurrentStep('upload');
   };
@@ -181,7 +202,6 @@ const Index = () => {
   if (!user) {
     return null;
   }
-
 
   return (
     <div className="min-h-screen bg-background">
@@ -252,28 +272,32 @@ const Index = () => {
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Novo Tratamento
+                {!isPremium && (
+                  <span className="ml-1 text-xs opacity-70">
+                    ({treatmentData.getActiveTreatments().length}/{treatmentData.features.maxActiveTreatments})
+                  </span>
+                )}
               </Button>
             </div>
-
 
             <Tabs defaultValue="active" className="w-full">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="active" className="flex items-center gap-2">
                   <Activity className="h-4 w-4" />
-                  Ativos ({getActiveTreatments().length})
+                  Ativos ({treatmentData.getActiveTreatments().length})
                 </TabsTrigger>
                 <TabsTrigger value="completed" className="flex items-center gap-2">
                   <Calendar className="h-4 w-4" />
-                  Arquivados ({getArchivedTreatments().length})
+                  Arquivados ({treatmentData.getCompletedTreatments().length})
                 </TabsTrigger>
               </TabsList>
 
               <TabsContent value="active" className="space-y-4">
-                {treatmentsLoading ? (
+                {treatmentData.loading ? (
                   <div className="text-center py-12">
                     <Loader2 className="h-8 w-8 animate-spin mx-auto" />
                   </div>
-                ) : getActiveTreatments().length === 0 ? (
+                ) : treatmentData.getActiveTreatments().length === 0 ? (
                   <Card className="text-center py-12">
                     <CardContent>
                       <Pill className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -292,7 +316,7 @@ const Index = () => {
                   </Card>
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2">
-                    {getActiveTreatments().map((treatment) => (
+                    {treatmentData.getActiveTreatments().map((treatment) => (
                       <Card key={treatment.id} className="p-4">
                         <CardContent className="p-0">
                           <h3 className="font-semibold">{treatment.title}</h3>
@@ -313,7 +337,7 @@ const Index = () => {
               </TabsContent>
 
               <TabsContent value="completed" className="space-y-4">
-                {getArchivedTreatments().length === 0 ? (
+                {treatmentData.getCompletedTreatments().length === 0 ? (
                   <Card className="text-center py-12">
                     <CardContent>
                       <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -325,7 +349,7 @@ const Index = () => {
                   </Card>
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2">
-                    {getArchivedTreatments().map((treatment) => (
+                    {treatmentData.getCompletedTreatments().map((treatment) => (
                       <Card key={treatment.id} className="p-4">
                         <CardContent className="p-0">
                           <h3 className="font-semibold">{treatment.title}</h3>
@@ -443,6 +467,16 @@ const Index = () => {
           </div>
         )}
       </main>
+      
+      <PlanRestrictionModal
+        open={restrictionModal.open}
+        onOpenChange={(open) => setRestrictionModal(prev => ({ ...prev, open }))}
+        restrictionType={restrictionModal.type}
+        onUpgrade={() => {
+          setRestrictionModal({ open: false, type: 'maxTreatments' });
+          navigate('/profile');
+        }}
+      />
 
       {/* Footer */}
       <footer className="border-t border-border bg-card mt-12">
