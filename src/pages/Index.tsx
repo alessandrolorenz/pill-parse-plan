@@ -56,11 +56,7 @@ const Index = () => {
       return;
     }
 
-    // Check if user can use advanced analysis
-    if (!treatmentData.canUseAdvancedAnalysis()) {
-      setRestrictionModal({ open: true, type: 'advancedAnalysis' });
-      return;
-    }
+    // Análise básica disponível para todos os usuários
 
     setIsAnalyzing(true);
     
