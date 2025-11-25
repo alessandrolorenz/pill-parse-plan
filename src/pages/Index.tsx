@@ -43,8 +43,12 @@ const Index = () => {
   
   const treatmentData = useManagedTreatments();
 
-  // Usuários não autenticados podem usar o app com limitações (plano gratuito)
-  // Não há redirecionamento forçado para auth
+  // Verificar autenticação
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/auth');
+    }
+  }, [user, loading, navigate]);
 
   const handleAnalyzeImage = async () => {
     if (!selectedImage) {
@@ -56,7 +60,11 @@ const Index = () => {
       return;
     }
 
-    // Análise básica disponível para todos os usuários
+    // Check if user can use advanced analysis
+    if (!treatmentData.canUseAdvancedAnalysis()) {
+      setRestrictionModal({ open: true, type: 'advancedAnalysis' });
+      return;
+    }
 
     setIsAnalyzing(true);
     
@@ -191,6 +199,10 @@ const Index = () => {
     );
   }
 
+  if (!user) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -212,22 +224,13 @@ const Index = () => {
             </div>
             
             <div className="flex items-center gap-2">
-              {user ? (
-                <>
-                  <Button variant="ghost" size="sm" onClick={() => navigate('/profile')}>
-                    <User className="h-4 w-4 mr-2" />
-                    Perfil
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={handleSignOut}>
-                    <LogOut className="h-4 w-4" />
-                  </Button>
-                </>
-              ) : (
-                <Button variant="default" size="sm" onClick={() => navigate('/auth')}>
-                  <User className="h-4 w-4 mr-2" />
-                  Entrar / Cadastrar
-                </Button>
-              )}
+              <Button variant="ghost" size="sm" onClick={() => navigate('/profile')}>
+                <User className="h-4 w-4 mr-2" />
+                Perfil
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleSignOut}>
+                <LogOut className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </div>
