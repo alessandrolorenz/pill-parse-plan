@@ -20,8 +20,8 @@ const PlanContext = createContext<PlanContextType | undefined>(undefined);
 
 const FREE_FEATURES: PlanFeatures = {
   maxActiveTreatments: 1,
-  advancedAnalysis: false,
-  cloudStorage: false,
+  advancedAnalysis: true,
+  cloudStorage: true,
   unlimitedTreatments: false,
 };
 

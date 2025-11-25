@@ -15,7 +15,9 @@ export function useManagedTreatments() {
   const supabaseTreatments = useSupabaseTreatments();
 
   // Decide which treatment system to use based on plan
-  const useCloud = isPremium && features.cloudStorage;
+  // TODO
+  // const useCloud = isPremium && features.cloudStorage;
+  const useCloud = true;
   const treatmentHook = useCloud ? supabaseTreatments : localTreatments;
 
   const getActiveTreatments = () => {
@@ -53,6 +55,8 @@ export function useManagedTreatments() {
     if (!restriction.canAddTreatment) {
       throw new Error(restriction.message);
     }
+
+    console.log('Adding treatment using', useCloud ? 'Supabase' : 'Local Storage');
 
     if (useCloud) {
       return await supabaseTreatments.addTreatment(plan, startDateTime, imagePath);
