@@ -1,5 +1,5 @@
 // Service Worker para Tratamento por Receita
-// Handles caching and notifications
+// Handles caching, push notifications e cliques em notificações
 
 const CACHE_NAME = 'tratamento-receita-v1';
 const urlsToCache = [
@@ -46,64 +46,71 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Notification handling
-self.addEventListener('message', (event) => {
-  if (event.data.type === 'SCHEDULE_NOTIFICATIONS') {
-    const events = event.data.events;
-    
-    // Cancel previous notifications
-    self.registration.getNotifications().then(notifications => {
-      notifications.forEach(notification => notification.close());
-    });
-    
-    // Schedule new notifications
-    events.forEach(eventData => {
-      const eventTime = new Date(eventData.startISO).getTime();
-      const now = Date.now();
-      const delay = eventTime - now;
-      
-      if (delay > 0 && delay <= 48 * 60 * 60 * 1000) { // Only schedule for next 48 hours
-        setTimeout(() => {
-          self.registration.showNotification(eventData.title, {
-            body: eventData.description || 'Hora do medicamento!',
-            icon: '/favicon.ico',
-            badge: '/favicon.ico',
-            requireInteraction: true,
-            vibrate: [200, 100, 200],
-            actions: [
-              { action: 'taken', title: 'Tomei' },
-              { action: 'snooze', title: 'Lembrar em 5min' }
-            ],
-            data: eventData
-          });
-        }, delay);
-      }
-    });
-  }
+// Recebe push do servidor e mostra a notificação imediatamente
+self.addEventListener('push', (event) => {
+  const data = event.data ? event.data.json() : {};
+
+  const title = data.title || 'Lembrete de medicamento';
+  const body = data.body || 'Hora de tomar seu medicamento.';
+
+  const options = {
+    body,
+    icon: '/favicon.ico',
+    badge: '/favicon.ico',
+    requireInteraction: true,
+    vibrate: [200, 100, 200],
+    data,
+    actions: [
+      { action: 'taken', title: 'Tomei' },
+      { action: 'snooze', title: 'Lembrar em 5min' }
+    ]
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  );
 });
 
 // Handle notification clicks
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  
-  if (event.action === 'taken') {
-    // Mark as taken (implement in future)
-    console.log('Medicamento marcado como tomado');
-  } else if (event.action === 'snooze') {
-    // Reschedule for 5 minutes
-    const eventData = event.notification.data;
-    setTimeout(() => {
-      self.registration.showNotification(eventData.title, {
-        body: eventData.description || 'Lembrete de medicamento (reagendado)',
-        icon: '/favicon.ico',
-        requireInteraction: true,
-        vibrate: [200, 100, 200]
+
+  const data = event.notification.data || {};
+  const action = event.action || 'open';
+
+  // Envia ação para o backend registrar "tomei" ou "soneca"
+  const handleClick = async () => {
+    try {
+      // URL relativa ao domínio atual; o servidor Express deve expor este endpoint
+      await fetch('/api/notifications/click', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action,
+          reminderId: data.reminderId || null,
+          eventId: data.eventId || null,
+          treatmentId: data.treatmentId || null
+        })
       });
-    }, 5 * 60 * 1000);
-  } else {
-    // Open app
-    clients.openWindow('/');
-  }
+    } catch (error) {
+      // Apenas loga; a UX principal é abrir o app
+      console.error('Erro ao registrar clique na notificação', error);
+    }
+
+    if (action === 'open' || !action) {
+      // Foca/abre a aplicação
+      const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+      if (allClients.length > 0) {
+        allClients[0].focus();
+      } else {
+        await clients.openWindow('/');
+      }
+    }
+  };
+
+  event.waitUntil(handleClick());
 });
 
 // Background sync for future features

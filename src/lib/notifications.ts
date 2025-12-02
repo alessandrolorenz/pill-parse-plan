@@ -1,6 +1,12 @@
 import { CalendarEvent } from './types';
+import { supabase } from '@/integrations/supabase/client';
+
+// ATENÇÃO: defina a VAPID public key no .env e exponha via import.meta.env.VITE_VAPID_PUBLIC_KEY
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
 
 export async function requestNotificationPermission(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+
   if (!('Notification' in window)) {
     console.warn('Este navegador não suporta notificações');
     return false;
@@ -18,34 +24,118 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return permission === 'granted';
 }
 
-export function scheduleNotifications(events: CalendarEvent[]): void {
-  if (!('serviceWorker' in navigator)) {
-    console.warn('Service Worker não suportado');
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+
+  return outputArray;
+}
+
+async function getOrCreatePushSubscription(): Promise<PushSubscription | null> {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    console.warn('Push notifications não são suportadas neste navegador');
+    return null;
+  }
+
+  if (!VAPID_PUBLIC_KEY) {
+    console.warn('VITE_VAPID_PUBLIC_KEY não configurada; push desabilitado');
+    return null;
+  }
+
+  const registration = await navigator.serviceWorker.ready;
+  let subscription = await registration.pushManager.getSubscription();
+
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+  }
+
+  return subscription;
+}
+
+export async function registerPushSubscription(): Promise<void> {
+  const session = (await supabase.auth.getSession()).data.session;
+  if (!session) {
+    console.warn('Usuário não autenticado; não registrando push subscription');
     return;
   }
 
-  // Filtrar eventos futuros próximos (próximas 48 horas)
+  const subscription = await getOrCreatePushSubscription();
+  if (!subscription) return;
+
+  try {
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // O backend pode validar este token se necessário
+        Authorization: `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({
+        subscription,
+        deviceInfo: {
+          userAgent: navigator.userAgent,
+          platform: 'web'
+        }
+      })
+    });
+  } catch (error) {
+    console.error('Erro ao registrar push subscription', error);
+  }
+}
+
+export async function scheduleNotifications(
+  treatmentId: string,
+  events: CalendarEvent[]
+): Promise<void> {
+  const session = (await supabase.auth.getSession()).data.session;
+  if (!session) {
+    console.warn('Usuário não autenticado; não agendando notificações');
+    return;
+  }
+
+  // Filtrar próximas 48h para não lotar a fila
   const now = new Date();
   const next48Hours = new Date(now.getTime() + 48 * 60 * 60 * 1000);
-  
-  const upcomingEvents = events.filter(event => {
+
+  const upcomingEvents = events.filter((event) => {
     const eventDate = new Date(event.startISO);
     return eventDate > now && eventDate <= next48Hours;
   });
 
-  // Salvar eventos no localStorage para o service worker acessar
-  localStorage.setItem('scheduledEvents', JSON.stringify(upcomingEvents));
-  
-  // Notificar o service worker para agendar as notificações
-  if (navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage({
-      type: 'SCHEDULE_NOTIFICATIONS',
-      events: upcomingEvents
+  if (upcomingEvents.length === 0) {
+    console.warn('Nenhum evento nas próximas 48h para agendar notificações');
+    return;
+  }
+
+  try {
+    await fetch('/api/notifications/schedule', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({
+        treatmentId,
+        events: upcomingEvents
+      })
     });
+  } catch (error) {
+    console.error('Erro ao agendar notificações', error);
   }
 }
 
 export function showTestNotification(): void {
+  if (typeof window === 'undefined') return;
+
   if (Notification.permission === 'granted') {
     new Notification('Teste de Notificação', {
       body: 'As notificações estão funcionando!',
@@ -53,59 +143,3 @@ export function showTestNotification(): void {
     });
   }
 }
-
-// Função para o Service Worker - será usada em public/sw.js
-export const serviceWorkerNotificationCode = `
-self.addEventListener('message', (event) => {
-  if (event.data.type === 'SCHEDULE_NOTIFICATIONS') {
-    const events = event.data.events;
-    
-    // Cancelar notificações anteriores
-    self.registration.getNotifications().then(notifications => {
-      notifications.forEach(notification => notification.close());
-    });
-    
-    // Agendar novas notificações
-    events.forEach(eventData => {
-      const eventTime = new Date(eventData.startISO).getTime();
-      const now = Date.now();
-      const delay = eventTime - now;
-      
-      if (delay > 0) {
-        setTimeout(() => {
-          self.registration.showNotification(eventData.title, {
-            body: eventData.description || 'Hora do medicamento!',
-            icon: '/favicon.ico',
-            badge: '/favicon.ico',
-            requireInteraction: true,
-            actions: [
-              { action: 'taken', title: 'Tomei' },
-              { action: 'snooze', title: 'Lembrar em 5min' }
-            ]
-          });
-        }, delay);
-      }
-    });
-  }
-});
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  
-  if (event.action === 'taken') {
-    // Marcar como tomado (implementar no futuro)
-    console.log('Medicamento marcado como tomado');
-  } else if (event.action === 'snooze') {
-    // Reagendar para 5 minutos
-    setTimeout(() => {
-      self.registration.showNotification(event.notification.title, {
-        body: event.notification.body,
-        icon: '/favicon.ico'
-      });
-    }, 5 * 60 * 1000);
-  } else {
-    // Abrir app
-    clients.openWindow('/');
-  }
-});
-`;

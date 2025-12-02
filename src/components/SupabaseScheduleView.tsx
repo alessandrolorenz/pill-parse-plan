@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useSupabaseTreatments, SupabaseEvent } from '@/hooks/useSupabaseTreatments';
 import { eventsToICS } from '@/lib/ics';
-import { scheduleNotifications } from '@/lib/notifications';
+import { requestNotificationPermission, registerPushSubscription, scheduleNotifications } from '@/lib/notifications';
 import { format, isToday, isTomorrow, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -93,10 +93,9 @@ export function SupabaseScheduleView({ treatmentId, onBack }: SupabaseScheduleVi
 
   const handleEnableNotifications = async () => {
     try {
-      // Solicitar permissão de notificação
-      const permission = await Notification.requestPermission();
-      
-      if (permission !== 'granted') {
+      const granted = await requestNotificationPermission();
+
+      if (!granted) {
         toast({
           title: 'Permissão negada',
           description: 'Permita notificações para receber lembretes.',
@@ -113,8 +112,9 @@ export function SupabaseScheduleView({ treatmentId, onBack }: SupabaseScheduleVi
         endISO: undefined
       }));
 
-      // Agendar notificações
-      await scheduleNotifications(calendarEvents);
+      // Registrar subscription e agendar notificações
+      await registerPushSubscription();
+      await scheduleNotifications(treatmentId, calendarEvents);
       setNotificationsEnabled(true);
 
       toast({

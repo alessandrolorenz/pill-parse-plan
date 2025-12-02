@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 
 import { TreatmentRecord } from '@/lib/types';
 import { eventsToICS } from '@/lib/ics';
-import { requestNotificationPermission, scheduleNotifications } from '@/lib/notifications';
+import { requestNotificationPermission, registerPushSubscription, scheduleNotifications } from '@/lib/notifications';
 import { useTreatments } from '@/hooks/useTreatments';
 
 interface ScheduleViewProps {
@@ -84,7 +84,8 @@ export function ScheduleView({ treatmentId, onBack }: ScheduleViewProps) {
       const granted = await requestNotificationPermission();
       
       if (granted) {
-        scheduleNotifications(events);
+        await registerPushSubscription();
+        await scheduleNotifications(treatmentId, events);
         setNotificationsEnabled(true);
         
         toast({
