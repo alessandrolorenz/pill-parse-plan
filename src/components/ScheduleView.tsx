@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 
-import { TreatmentRecord } from '@/lib/types';
+import { TreatmentRecord } from '@pill-parse/core';
 import { eventsToICS } from '@/lib/ics';
 import { requestNotificationPermission, registerPushSubscription, scheduleNotifications } from '@/lib/notifications';
 import { useTreatments } from '@/hooks/useTreatments';

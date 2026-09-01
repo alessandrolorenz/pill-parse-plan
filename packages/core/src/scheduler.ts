@@ -29,8 +29,10 @@ function generateEventsForItem(
     const intervalMs = item.frequency.everyHours * 60 * 60 * 1000;
     const endDate = new Date(startDate.getTime() + (item.durationDays * 24 * 60 * 60 * 1000));
     
+    // Janela exclusiva no fim: um tratamento de D dias termina quando o dia D começa.
+    // Com `<=`, q8h/7d gerava 22 doses — uma além do tratamento. Ver FR-SCH-01.
     let currentDateTime = new Date(startDate);
-    while (currentDateTime <= endDate) {
+    while (currentDateTime < endDate) {
       events.push(createEventFromItem(item, currentDateTime));
       currentDateTime = new Date(currentDateTime.getTime() + intervalMs);
     }
@@ -51,14 +53,18 @@ function generateEventsForItem(
           events.push(createEventFromItem(item, eventDateTime));
         });
       } else {
-        // Distribuir uniformemente durante o dia
-        const hoursInterval = 24 / timesPerDay;
-        const startHour = startDate.getHours();
-        
+        // Distribuir uniformemente a partir do horário de início, avançando no tempo.
+        //
+        // A versão anterior calculava a hora do relógio com `% 24` sem avançar o dia,
+        // então 3x/dia começando às 20:00 gerava doses às 04:00 e 12:00 do MESMO dia —
+        // duas doses antes do início do tratamento. O offset absoluto abaixo nunca
+        // retrocede, preserva os minutos do início e mantém intervalos fracionários
+        // exatos (5x/dia = 4h48m, não 4h). Ver FR-SCH-03.
+        const intervalMs = (24 / timesPerDay) * 60 * 60 * 1000;
+        const dayOffsetMs = day * 24 * 60 * 60 * 1000;
+
         for (let i = 0; i < timesPerDay; i++) {
-          const eventDateTime = new Date(currentDate);
-          const eventHour = (startHour + (i * hoursInterval)) % 24;
-          eventDateTime.setHours(Math.floor(eventHour), startDate.getMinutes(), 0, 0);
+          const eventDateTime = new Date(startDate.getTime() + dayOffsetMs + (i * intervalMs));
           events.push(createEventFromItem(item, eventDateTime));
         }
       }

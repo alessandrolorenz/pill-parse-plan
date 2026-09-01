@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { TreatmentPlan, TreatmentItem } from '@/lib/types';
+import { TreatmentPlan, TreatmentItem } from '@pill-parse/core';
 
 interface PlanReviewProps {
   plan: TreatmentPlan;

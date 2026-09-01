@@ -1,4 +1,4 @@
-import { CalendarEvent } from './types';
+import { CalendarEvent } from '@pill-parse/core';
 import { supabase } from '@/integrations/supabase/client';
 
 // ATENÇÃO: defina a VAPID public key no .env e exponha via import.meta.env.VITE_VAPID_PUBLIC_KEY

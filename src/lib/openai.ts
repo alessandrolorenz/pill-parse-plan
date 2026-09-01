@@ -1,4 +1,4 @@
-import { TreatmentPlan } from './types';
+import { TreatmentPlan } from '@pill-parse/core';
 import { supabase } from '@/integrations/supabase/client';
 
 export async function extractPlanFromImage(

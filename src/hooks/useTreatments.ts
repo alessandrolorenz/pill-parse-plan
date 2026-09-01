@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TreatmentRecord, TreatmentPlan, CalendarEvent } from '@/lib/types';
-import { expandPlanToEvents } from '@/lib/scheduler';
+import { TreatmentRecord, TreatmentPlan, CalendarEvent, expandPlanToEvents } from '@pill-parse/core';
 
 const STORAGE_KEY = 'medicationApp_treatments';
 

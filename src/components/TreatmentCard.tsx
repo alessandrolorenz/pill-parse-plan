@@ -3,7 +3,7 @@ import { Clock, Calendar, CheckCircle2, Play } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { TreatmentRecord } from '@/lib/types';
+import { TreatmentRecord } from '@pill-parse/core';
 
 interface TreatmentCardProps {
   treatment: TreatmentRecord;

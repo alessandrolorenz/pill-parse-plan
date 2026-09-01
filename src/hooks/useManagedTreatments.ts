@@ -1,7 +1,7 @@
 import { usePlan } from '@/contexts/PlanContext';
 import { useTreatments } from '@/hooks/useTreatments';
 import { useSupabaseTreatments } from '@/hooks/useSupabaseTreatments';
-import { TreatmentPlan } from '@/lib/types';
+import { TreatmentPlan } from '@pill-parse/core';
 
 export interface TreatmentRestriction {
   canAddTreatment: boolean;

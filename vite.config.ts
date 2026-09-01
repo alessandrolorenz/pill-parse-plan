@@ -24,6 +24,7 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@pill-parse/core": path.resolve(__dirname, "./packages/core/src"),
     },
   },
 }));

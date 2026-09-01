@@ -17,7 +17,7 @@ import { PlanReview } from '@/components/PlanReview';
 import { SupabaseScheduleView } from '@/components/SupabaseScheduleView';
 import { TreatmentCard } from '@/components/TreatmentCard';
 
-import { TreatmentPlan, AppConfig } from '@/lib/types';
+import { TreatmentPlan, AppConfig } from '@pill-parse/core';
 import { extractPlanFromImage } from '@/lib/openai';
 
 type AppStep = 'home' | 'upload' | 'review' | 'schedule';

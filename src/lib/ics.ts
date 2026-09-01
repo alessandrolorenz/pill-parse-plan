@@ -1,4 +1,4 @@
-import { CalendarEvent } from './types';
+import { CalendarEvent } from '@pill-parse/core';
 
 function formatDateForICS(date: Date): string {
   return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';

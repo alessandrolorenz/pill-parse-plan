@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { TreatmentPlan, CalendarEvent } from '@/lib/types';
-import { expandPlanToEvents } from '@/lib/scheduler';
+import { TreatmentPlan, CalendarEvent, expandPlanToEvents } from '@pill-parse/core';
 
 export interface SupabaseTreatment {
   id: string;
