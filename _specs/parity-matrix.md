@@ -12,33 +12,68 @@ behavior demonstrably works in the browser.
 > turned out to be wrong when actually executed — including a dosing bug. Aspirational ✅s are
 > worse than blank ones: they hide exactly the divergence the matrix exists to surface.
 
-Last updated: 2026-09-01 · `npm run test:run` · **25 passing, 0 failing**
+Last updated: 2026-09-01 · **25/25 under Vitest (web), 25/25 under Jest, 25/25 on Hermes** — the
+Hermes run executed on an Android 17 emulator (Pixel_9), Expo Go 57, `Hermes for RN 0.86.2`.
+
+### Why RN is two columns
+
+`RN · Jest` and `RN · Hermes` are **different claims** and are tracked separately. `jest-expo`
+runs in Node/V8, so a green Jest run proves the harness contract holds under a second runner and
+that `packages/core` resolves and transforms under Babel/Metro. It says nothing about Hermes, the
+engine React Native actually ships. Collapsing the two into one ✅ would repeat exactly the
+overstatement this file was written to correct.
+
+Legend: ✅ ran and passed · ◐ partially evidenced, see note · ⬜ not verified
 
 ## Phase 1 — Core domain (`@pill-parse/core`)
 
-| Behavioral contract | Spec | Harness | Web | RN |
-|---|---|---|:--:|:--:|
-| `everyHours`: event count over the window | FR-SCH-01 / AC-01 | `scheduler.harness.ts` | ✅ | ⬜ |
-| `everyHours`: window is end-exclusive | FR-SCH-01 / AC-01, AC-02 | `scheduler.harness.ts` | ✅ | ⬜ |
-| `everyHours`: interval not dividing the window evenly | EC-06 | `scheduler.harness.ts` | ✅ | ⬜ |
-| `timesPerDay`: event count | FR-SCH-03 / AC-03 | `scheduler.harness.ts` | ✅ | ⬜ |
-| `timesPerDay`: never doses before the start instant | FR-SCH-03 / AC-04 | `scheduler.harness.ts` | ✅ | ⬜ |
-| `timesPerDay`: start minute preserved | FR-SCH-03 / AC-05 | `scheduler.harness.ts` | ✅ | ⬜ |
-| `timesPerDay`: fractional intervals exact | FR-SCH-03 / AC-06 | `scheduler.harness.ts` | ✅ | ⬜ |
-| Invariant: `timesPerDay: T` ≡ `everyHours: 24/T` | FR-SCH-04 / AC-07 | `scheduler.harness.ts` | ✅ | ⬜ |
-| `preferredTimes`: fixed wall-clock times per day | FR-SCH-02 / AC-08 | `scheduler.harness.ts` | ✅ | ⬜ |
-| `preferredTimes`: fewer entries than `timesPerDay` | EC-03 | `scheduler.harness.ts` | ✅ | ⬜ |
-| Event title format (medication / care) | FR-SCH-05 / AC-10 | `scheduler.harness.ts` | ✅ | ⬜ |
-| Event description composition | FR-SCH-06 / AC-13 | `scheduler.harness.ts` | ✅ | ⬜ |
-| Event duration is 5 minutes | FR-SCH-07 / AC-11 | `scheduler.harness.ts` | ✅ | ⬜ |
-| Multi-item output sorted and interleaved | FR-SCH-08 / AC-12 | `scheduler.harness.ts` | ✅ | ⬜ |
-| `durationDays: 0` on both branches | EC-01 / AC-09 | `scheduler.harness.ts` | ✅ | ⬜ |
-| Unschedulable item does not suppress the plan | EC-02 | `scheduler.harness.ts` | ✅ | ⬜ |
-| Empty plan | EC-05 | `scheduler.harness.ts` | ✅ | ⬜ |
-| Domain types carry no platform imports | AC-T04 | *not yet written* | ⬜ | ⬜ |
+| Behavioral contract | Spec | Web | RN · Jest | RN · Hermes |
+|---|---|:--:|:--:|:--:|
+| `everyHours`: event count over the window | FR-SCH-01 / AC-01 | ✅ | ✅ | ✅ |
+| `everyHours`: window is end-exclusive | FR-SCH-01 / AC-01, AC-02 | ✅ | ✅ | ✅ |
+| `everyHours`: interval not dividing the window evenly | EC-06 | ✅ | ✅ | ✅ |
+| `timesPerDay`: event count | FR-SCH-03 / AC-03 | ✅ | ✅ | ✅ |
+| `timesPerDay`: never doses before the start instant | FR-SCH-03 / AC-04 | ✅ | ✅ | ✅ |
+| `timesPerDay`: start minute preserved | FR-SCH-03 / AC-05 | ✅ | ✅ | ✅ |
+| `timesPerDay`: fractional intervals exact | FR-SCH-03 / AC-06 | ✅ | ✅ | ✅ |
+| Invariant: `timesPerDay: T` ≡ `everyHours: 24/T` | FR-SCH-04 / AC-07 | ✅ | ✅ | ✅ |
+| `preferredTimes`: fixed wall-clock times per day | FR-SCH-02 / AC-08 | ✅ | ✅ | ✅ |
+| `preferredTimes`: fewer entries than `timesPerDay` | EC-03 | ✅ | ✅ | ✅ |
+| Event title format (medication / care) | FR-SCH-05 / AC-10 | ✅ | ✅ | ✅ |
+| Event description composition | FR-SCH-06 / AC-13 | ✅ | ✅ | ✅ |
+| Event duration is 5 minutes | FR-SCH-07 / AC-11 | ✅ | ✅ | ✅ |
+| Multi-item output sorted and interleaved | FR-SCH-08 / AC-12 | ✅ | ✅ | ✅ |
+| `durationDays: 0` on both branches | EC-01 / AC-09 | ✅ | ✅ | ✅ |
+| Unschedulable item does not suppress the plan | EC-02 | ✅ | ✅ | ✅ |
+| Empty plan | EC-05 | ✅ | ✅ | ✅ |
+| Domain types carry no platform imports | AC-T04 | ⬜ | ⬜ | ⬜ |
 
-The RN column stays ⬜ until an `apps/mobile` Jest driver imports `scheduler.harness.ts` and runs
-the same assertions. That driver is ~10 lines — the harness itself is already platform-neutral.
+**The Hermes column was executed, not inferred.** The harness screen was run in Expo Go 57 on a
+Pixel_9 emulator (Android 17), and the app logged:
+
+```
+[parity] PASS 25/25 on Hermes for RN 0.86.2
+```
+
+The engine string is read from `HermesInternal.getRuntimeProperties()` at runtime, so a green run
+cannot be mistaken for a V8 run.
+
+### Negative control
+
+A parity harness that cannot fail is worse than no harness. AC-01's expected value was temporarily
+changed from 21 to 20, and **all three drivers went red on that assertion by name**:
+
+| Driver | Result with AC-01 broken |
+|---|---|
+| Vitest | 1 failed, 24 passed |
+| Jest | 1 failed, 24 passed |
+| Hermes (on device, via fast refresh) | `[parity] FAIL 24/25 on Hermes for RN 0.86.2` → `FAILED AC-01 … expected 20, received 21` |
+
+Reverted afterwards; all three returned to 25/25. The Vitest and Jest drivers were additionally
+diffed and assert an **identical set of 25 names**, not merely an identical count.
+
+This matters most for the third driver, whose `toEqual` is hand-rolled: a permissive deep-equal
+would have produced a green run that meant nothing. It fails when it should.
 
 ## Phase 2+ — Not yet started
 

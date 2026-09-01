@@ -36,8 +36,9 @@ npm run server         # Express API on :3001  (currently broken — see gotchas
 npm run dev:full       # both
 npm run build          # production build (~40s; the 563 kB chunk warning is expected)
 npm run lint           # eslint — already red, see below
-npm run test           # vitest, watch mode
-npm run test:run       # vitest, single run — 25 tests, all green
+npm run test           # vitest (web), watch mode
+npm run test:run       # vitest (web), single run — 25 tests, all green
+npm run test:mobile    # jest (RN toolchain), same 25 assertions via the shared harness
 npm run script:sync               # all three Figma syncs
 npm run script:sync-tokens        # Figma design tokens → src/index.css
 npm run script:sync-text-styles   # Figma text styles
@@ -62,22 +63,53 @@ file `Parser`), as is the Figma-variable → CSS-custom-property map.
 
 ### `packages/core` is the shared domain layer
 
-The repo is an **npm workspace** (`workspaces: ["packages/*"]` — npm, not pnpm; `pnpm-lock.yaml`
-is still a stale leftover). `@pill-parse/core` holds `types.ts` and `scheduler.ts`, resolved via
-an alias in `vite.config.ts` and both tsconfigs. Import domain types and the scheduler from
-`@pill-parse/core`, never by relative path.
+The repo is an **npm workspace** (`workspaces: ["packages/*", "apps/*"]` — npm, not pnpm;
+`pnpm-lock.yaml` is still a stale leftover). `@pill-parse/core` holds `types.ts` and
+`scheduler.ts`, resolved via an alias in `vite.config.ts` and both tsconfigs. Import domain types
+and the scheduler from `@pill-parse/core`, never by relative path.
 
-**Nothing in `packages/core` may touch a browser, Node, or React Native API.** It is consumed
-verbatim by the React Native app later — that constraint is the whole point of the package.
-`src/lib/utils.ts` (`cn()`, over `clsx` + `tailwind-merge`) deliberately stayed with the web app
-for this reason, contrary to the migration guide's Appendix C.
+**Nothing in `packages/core` may touch a browser, Node, or React Native API — and that includes
+`Intl` / `toLocale*`.** Hermes delegates those to platform ICU on Android, so locale output can
+differ by device, breaking parity in a way no Node-based test would catch. `formatEventForDisplay`
+was deleted for exactly this reason. `src/lib/utils.ts` (`cn()`, over `clsx` + `tailwind-merge`)
+stayed with the web app on the same principle, contrary to the migration guide's Appendix C.
 
-Behavior here is governed by specs in `_specs/core/`, enforced by
-`packages/core/src/__tests__/scheduler.harness.ts`. The harness takes `(impl, describe, it,
-expect)` rather than importing a runner, so the same assertions will run under Jest on React
-Native; `scheduler.test.ts` is just the ~10-line Vitest binding. **Change the spec before changing
-scheduler behavior** — the acceptance criteria are pinned to exact numbers on purpose, and
-`_specs/parity-matrix.md` tracks what is actually verified on each platform.
+Behavior is governed by specs in `_specs/core/`, enforced by
+`packages/core/src/testing/scheduler.harness.ts`. **Change the spec before changing scheduler
+behavior** — acceptance criteria are pinned to exact numbers on purpose, and
+`_specs/parity-matrix.md` tracks what is verified on which platform.
+
+The harness takes `(impl, describe, it, expect)` instead of importing a runner, so one file drives
+**three** drivers:
+
+| Driver | Runner | Engine | Command |
+|---|---|---|---|
+| `packages/core/src/__tests__/scheduler.test.ts` | Vitest | Node/V8 | `npm run test:run` |
+| `apps/mobile/__tests__/scheduler.test.ts` | Jest (`jest-expo`) | Node/V8 | `npm run test:mobile` |
+| `apps/mobile/App.tsx` + `src/harnessRunner.ts` | hand-rolled collector | **Hermes** | `npx expo start`, open in Expo Go |
+
+It is exported as `@pill-parse/core/harness` and **must stay out of `__tests__/`** — Metro's
+default blockList is `/\\__tests__\\.*$/`, so anything there is invisible to the RN bundler and
+fails with a baffling "file does not exist" for a file that plainly exists.
+
+### `apps/mobile` — the React Native app
+
+Expo SDK 57 / RN 0.86 / React 19, currently a harness screen and nothing else: it runs the
+scheduler contract on Hermes and renders pass/fail. Phase 3+ builds real screens around it.
+
+Two workspace gotchas, both already handled in `apps/mobile/metro.config.js`:
+
+- Metro needs `watchFolders` + `nodeModulesPaths` pointed at the workspace root, or it will not
+  follow the `@pill-parse/core` symlink.
+- **Leave `disableHierarchicalLookup` off.** Expo's monorepo guide suggests enabling it, which
+  suits a flat pnpm store. npm nests Expo's own dependencies under
+  `apps/mobile/node_modules/expo/node_modules/*` (the web app pins React 18, this app is on 19),
+  and disabling hierarchical lookup makes those unreachable — the bundle dies on `expo-asset`.
+
+`npx expo install` **does not work here**: it detects the stale root `bun.lockb` and shells out to
+`bun`, which is not installed. Install with `npm install -D -w mobile <pkg>@<version>` instead —
+`expo install` still prints the SDK-correct versions before it fails, which is a convenient way to
+look them up.
 
 ### Two backends exist; only one is on the frontend's hot path
 

@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
     "dev": "vite",
@@ -16,6 +17,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:mobile": "npm --workspace mobile run test",
     "script:sync": "npx tsx --tsconfig tsconfig.scripts.json scripts/figma-sync.ts",
     "script:sync-tokens": "npx tsx --tsconfig tsconfig.scripts.json scripts/sync-tokens.ts",
     "script:sync-text-styles": "npx tsx --tsconfig tsconfig.scripts.json scripts/sync-text-styles.ts",
