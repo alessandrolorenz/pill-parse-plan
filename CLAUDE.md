@@ -61,6 +61,25 @@ file `Parser`), as is the Figma-variable → CSS-custom-property map.
 
 ## Architecture notes
 
+### The dependency rule
+
+**`_specs/architecture.md` is the structural contract** — current-state and target diagrams, plus
+what each layer may import. Read it before adding a package, moving a module, or introducing a
+dependency. One rule governs everything:
+
+```
+apps  →  hooks  →  api  →  core          dependencies point inward, never outward
+```
+
+`core` imports nothing. The further inward a module sits, the more platforms share it — that is
+the difference between writing this app once and writing it twice.
+
+It is enforced, not merely documented: per-layer `no-restricted-imports` in `eslint.config.js`,
+and `packages/core/src/__tests__/purity.test.ts`, which fails on any external import, platform
+global, or `Intl`/`toLocale*` in the shared package. The rules are scoped to layers that are clean
+today; the web app's five-layer Supabase coupling becomes an error when `packages/api` lands, not
+before.
+
 ### `packages/core` is the shared domain layer
 
 The repo is an **npm workspace** (`workspaces: ["packages/*", "apps/*"]` — npm, not pnpm;
@@ -246,9 +265,10 @@ see the gotchas.
 - `_plans/` — planning docs: `rn-migration-sdd-guide.md` (React Native migration strategy written
   against this exact codebase, with `prompt-0.md` as the prompt that produced it),
   `pill-parse-plan-figma-redesign.md`, `como-eu-faria-pra-synchronous-flame.md`.
-- `_specs/` — `core/scheduler.spec.md` and `core/types.spec.md` are live contracts for
-  `packages/core`; `parity-matrix.md` tracks which contracts are harness-verified per platform;
-  `template.md` is the spec template for SDD-style work.
+- `_specs/` — `architecture.md` is the structural contract (current + target diagrams, layer
+  rules, enforcement); `core/scheduler.spec.md` and `core/types.spec.md` are behavioral contracts
+  for `packages/core`; `parity-matrix.md` tracks which contracts are harness-verified per
+  platform; `template.md` is the spec template for SDD-style work.
 - `headme.md` — product notes.
 - `.aicockpit/` — Figma MCP skills, a `create-specs` workflow, and a context7 usage rule. The
   skills and the context7 rule are generic and reusable.

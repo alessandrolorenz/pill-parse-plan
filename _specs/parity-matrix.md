@@ -46,7 +46,12 @@ Legend: ✅ ran and passed · ◐ partially evidenced, see note · ⬜ not verif
 | `durationDays: 0` on both branches | EC-01 / AC-09 | ✅ | ✅ | ✅ |
 | Unschedulable item does not suppress the plan | EC-02 | ✅ | ✅ | ✅ |
 | Empty plan | EC-05 | ✅ | ✅ | ✅ |
-| Domain types carry no platform imports | AC-T04 | ⬜ | ⬜ | ⬜ |
+| Domain types carry no platform imports | AC-T04 | ✅ | ✅ | ✅ |
+
+AC-T04 is marked across all three columns because it is enforced statically rather than at
+runtime: `packages/core/src/__tests__/purity.test.ts` scans every shipped file for external
+imports, platform globals, and `Intl`/`toLocale*`, and `eslint.config.js` denies the same imports
+per layer. A violation therefore cannot reach any platform. See `_specs/architecture.md`.
 
 **The Hermes column was executed, not inferred.** The harness screen was run in Expo Go 57 on a
 Pixel_9 emulator (Android 17), and the app logged:
