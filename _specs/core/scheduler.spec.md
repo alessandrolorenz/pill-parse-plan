@@ -144,11 +144,22 @@ rows, so only newly created treatments use the corrected schedule. No backfill i
 
 ## Testing Guidelines
 
-Harness at [packages/core/src/\_\_tests\_\_/scheduler.harness.ts](../../packages/core/src/__tests__/scheduler.harness.ts).
+Harness at [packages/core/src/testing/scheduler.harness.ts](../../packages/core/src/testing/scheduler.harness.ts).
 
 Written as an exported function taking `(impl, describe, it, expect)` so the identical assertions
-run under Vitest on web today and Jest under React Native later — this is what makes it a *parity*
-harness rather than a web test. One assertion per AC above, labelled with its AC id.
+run under three drivers — this is what makes it a *parity* harness rather than a web test. One
+assertion per AC above, labelled with its AC id.
+
+| Driver | Runner | Engine | Where |
+|---|---|---|---|
+| `packages/core/src/__tests__/scheduler.test.ts` | Vitest | Node / V8 | `npm run test:run` |
+| `apps/mobile/__tests__/scheduler.test.ts` | Jest (`jest-expo`) | Node / V8 | `npm run test:mobile` |
+| `apps/mobile/App.tsx` + `src/harnessRunner.ts` | hand-rolled collector | **Hermes** | Expo Go on a device |
+
+The third driver exists because the first two both run in Node: neither exercises the engine React
+Native ships. It is exported from the package as `@pill-parse/core/harness`, and lives in
+`testing/` rather than `__tests__/` because Metro's default blockList makes `__tests__` invisible
+to the React Native bundler.
 
 All fixtures use a **fixed** start date. `expandPlanToEvents` reads local-time components, so any
 test built on `new Date()` would pass or fail depending on the wall clock and the runner's

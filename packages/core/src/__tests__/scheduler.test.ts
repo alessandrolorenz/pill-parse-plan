@@ -9,6 +9,6 @@
 
 import { describe, it, expect } from 'vitest';
 import { expandPlanToEvents } from '../scheduler';
-import { runSchedulerHarness } from './scheduler.harness';
+import { runSchedulerHarness } from '../testing/scheduler.harness';
 
 runSchedulerHarness(expandPlanToEvents, describe, it, expect);

@@ -1,12 +1,19 @@
 /**
  * Scheduler parity harness.
  *
- * Encodes _specs/core/scheduler.spec.md as executable assertions. This file is
- * imported by BOTH platforms' test suites and receives the implementation under
- * test plus the runner's globals, so the identical assertions run under Vitest
- * on web and Jest under React Native. Do not import a runner here.
+ * Encodes _specs/core/scheduler.spec.md as executable assertions. It receives
+ * the implementation under test plus the runner's globals, so the identical
+ * assertions run under three drivers: Vitest (web), Jest (React Native
+ * toolchain), and the on-device collector in apps/mobile. Do not import a
+ * runner here.
  *
  * Every assertion is labelled with the acceptance criterion it enforces.
+ *
+ * WHY THIS LIVES IN testing/ AND NOT __tests__/: this file is not a test, it is
+ * a shared contract artifact that tests consume — and Metro's default blockList
+ * (/\\__tests__\\.*$/) makes anything under __tests__ invisible to the React
+ * Native bundler. Moving it back would break the on-device runner with a
+ * confusing "file does not exist" error for a file that plainly exists.
  */
 
 import type { TreatmentPlan, TreatmentItem, CalendarEvent } from '../types';

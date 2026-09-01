@@ -93,14 +93,3 @@ function createEventFromItem(item: TreatmentItem, dateTime: Date): CalendarEvent
     endISO: endDateTime.toISOString()
   };
 }
-
-export function formatEventForDisplay(event: CalendarEvent): string {
-  const date = new Date(event.startISO);
-  const dateStr = date.toLocaleDateString('pt-BR');
-  const timeStr = date.toLocaleTimeString('pt-BR', { 
-    hour: '2-digit', 
-    minute: '2-digit' 
-  });
-  
-  return `${dateStr} às ${timeStr} - ${event.title}`;
-}

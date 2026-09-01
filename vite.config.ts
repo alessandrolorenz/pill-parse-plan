@@ -27,4 +27,10 @@ export default defineConfig(({ mode }) => ({
       "@pill-parse/core": path.resolve(__dirname, "./packages/core/src"),
     },
   },
+  test: {
+    // Scoped deliberately: apps/mobile runs the same harness under Jest with the
+    // React Native preset. Vitest's default root-wide glob would try to execute
+    // those RN tests in this Node environment and fail confusingly.
+    include: ["packages/*/src/**/*.test.ts"],
+  },
 }));
