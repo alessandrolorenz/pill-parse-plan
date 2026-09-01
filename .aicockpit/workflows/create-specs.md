@@ -5,7 +5,7 @@ description: Create a feature spec file and branch from a short idea
 argument-hint: "[Short feature description, optionally: 'figma: <component-link>']"
 ---
 
-You are helping to spin up a new feature spec for this application, from a short idea provided in the user input below. Always adhere to any rules or requirements set out in any SDS-Instructions.md files when responding.
+You are helping to spin up a new feature spec for this application, from a short idea provided in the user input below. Always adhere to the conventions in `CLAUDE.md` at the repository root, and to any existing spec under `_specs/` that the feature touches — `_specs/core/` holds the live contracts for `@pill-parse/core`.
 
 User input: $ARGUMENTS
 
