@@ -1,69 +1,103 @@
 ---
 name: figma-create-new-file
-description: Create a new blank Figma file. Use when the user wants to create a new Figma design or FigJam file, or when you need a new file before calling use_figma. Handles plan resolution via whoami if needed. Usage — /figma-create-new-file [editorType] [fileName] (e.g. /figma-create-new-file figjam My Whiteboard)
-disable-model-invocation: true
+description: "Create a new blank Figma file. Use when the user wants to create a new Figma design or FigJam file, or when you need a new file before calling Figma write tools. Usage: /figma-create-new-file [editorType] [fileName]. editorType is 'design' (default) or 'figjam'."
+disable-model-invocation: false
 ---
 
-# create_new_file — Create a New Figma File
+# figma-create-new-file
 
-Use the `create_new_file` MCP tool to create a new blank Figma file in the user's drafts folder. This is typically used before `use_figma` when you need a fresh file to work with.
+Create a new blank Figma file. Use when the user wants to create a new Figma design or FigJam file, or when you need a new file before calling Figma write tools.
 
-## Skill Arguments
+**Usage**: `/figma-create-new-file [editorType] [fileName]`
+- `editorType`: `design` (default) or `figjam`
+- `fileName`: The name for the new file
 
-This skill accepts optional arguments: `/figma-create-new-file [editorType] [fileName]`
+**Examples**:
+- `/figma-create-new-file design My Design System`
+- `/figma-create-new-file figjam Architecture Diagram`
+- `/figma-create-new-file` (prompts for details)
 
-- **editorType**: `design` (default) or `figjam`
-- **fileName**: Name for the new file (defaults to "Untitled")
+**Requires**: Figma Official MCP (`figma-windows-cmd`) connection.
 
-Examples:
-- `/figma-create-new-file` — creates a design file named "Untitled"
-- `/figma-create-new-file figjam My Whiteboard` — creates a FigJam file named "My Whiteboard"
-- `/figma-create-new-file design My New Design` — creates a design file named "My New Design"
+## MCP Requirements
 
-Parse the arguments from the skill invocation. If editorType is not provided, default to `"design"`. If fileName is not provided, default to `"Untitled"`.
+This skill uses **Figma Official MCP** exclusively:
+- `whoami` — Get current user info and resolve team/plan details
+- `create_new_file` — Create the new file
 
 ## Workflow
 
-### Step 1: Resolve the planKey
+### Step 1: Resolve User Plan (if needed)
+If the user hasn't specified a team or the file creation requires team context:
 
-The `create_new_file` tool requires a `planKey` parameter. Follow this decision tree:
-
-1. **User already provided a planKey** (e.g. from a previous `whoami` call or in their prompt) → use it directly, skip to Step 2.
-
-2. **No planKey available** → call the `whoami` tool. The response contains a `plans` array. Each plan has a `key`, `name`, `seat`, and `tier`.
-
-   - **Single plan**: use its `key` field automatically.
-   - **Multiple plans**: ask the user which team or organization they want to create the file in, then use the corresponding plan's `key`.
-
-### Step 2: Call create_new_file
-
-Call the `create_new_file` tool with:
-
-| Parameter    | Required | Description |
-|-------------|----------|-------------|
-| `planKey`   | Yes      | The plan key from Step 1 |
-| `fileName`  | Yes      | Name for the new file |
-| `editorType`| Yes      | `"design"` or `"figjam"` |
-
-Example:
-```json
-{
-  "planKey": "team:123456",
-  "fileName": "My New Design",
-  "editorType": "design"
-}
+```
+whoami()
 ```
 
-### Step 3: Use the result
+Returns:
+- User ID and name
+- Email
+- Plan type (Starter, Professional, Organization, Enterprise)
+- Team IDs (if on a team plan)
 
-The tool returns:
-- `file_key` — the key of the newly created file
-- `file_url` — a direct URL to open the file in Figma
+Use the team ID for `create_new_file` if the user is on a team plan.
 
-Use the `file_key` for subsequent tool calls like `use_figma`.
+### Step 2: Determine File Parameters
+From the user's request, determine:
+- `name` — File name (required)
+- `editorType` — `'design'` or `'figjam'` (default: `'design'`)
+- `teamId` — Team ID (optional, from `whoami` if needed)
 
-## Important Notes
+### Step 3: Create the File
+```
+create_new_file(name, editorType, teamId?)
+```
 
-- The file is created in the user's **drafts folder** for the selected plan.
-- Only `"design"` and `"figjam"` editor types are supported.
-- If `use_figma` is your next step, load the `figma-use` skill before calling it.
+Returns:
+- `fileKey` — The new file's key (use this for all subsequent operations)
+- `url` — Direct URL to the new file
+
+### Step 4: Confirm and Provide Next Steps
+After creation, provide the user with:
+1. The file URL (so they can open it in Figma)
+2. The fileKey (for use with Console MCP tools)
+3. Suggested next steps based on the file type
+
+**For design files**, suggest:
+- Load `figma-generate-library` skill to build a design system
+- Load `figma-generate-design` skill to build screens
+- Load `figma-use` skill for general canvas operations
+
+**For FigJam files**, suggest:
+- Load `figma-console-figjam` skill to create boards and diagrams
+
+## File Type Reference
+
+| Editor Type | Use Case | Suggested Next Skill |
+|-------------|----------|---------------------|
+| `design` | UI design, components, design systems | `figma-generate-library`, `figma-generate-design` |
+| `figjam` | Brainstorming, diagrams, flowcharts, architecture | `figma-console-figjam` |
+
+## Plan Considerations
+
+| Plan | File Location | Notes |
+|------|--------------|-------|
+| Starter | Personal drafts | No team ID needed |
+| Professional | Personal or team | teamId optional |
+| Organization | Team required | Must provide teamId |
+| Enterprise | Team required | Must provide teamId |
+
+## Error Handling
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| "Team not found" | Invalid teamId | Use `whoami` to get correct team IDs |
+| "Permission denied" | Plan doesn't allow team files | Create in personal drafts (no teamId) |
+| "Name required" | Empty file name | Ask user for a file name |
+
+## Completion
+
+After successful creation:
+1. Share the file URL with the user
+2. Store the `fileKey` for use in subsequent Figma operations
+3. Suggest the appropriate next skill based on the file type

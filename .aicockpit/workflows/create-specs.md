@@ -1,95 +1,55 @@
-# Create-specs.md
-
 ---
-description: Create a feature spec file and branch from a short idea
-argument-hint: "[Short feature description, optionally: 'figma: <component-link>']"
+description: Cria uma feature spec completa para Hierarchical Reasoning e nova branch git
 ---
 
-You are helping to spin up a new feature spec for this application, from a short idea provided in the user input below. Always adhere to the conventions in `CLAUDE.md` at the repository root, and to any existing spec under `_specs/` that the feature touches — `_specs/core/` holds the live contracts for `@pill-parse/core`.
+Você é responsável por estruturar a especificação técnica e funcional de uma nova feature para este repositório, compatível com a metodologia Hierarchical Reasoning e rigorosamente alinhada às convenções em CLAUDE.md e _specs/architecture.md.
 
-User input: $ARGUMENTS
-
+Entrada do usuário: $ARGUMENTS
 
 ## High level behavior
 
-Your job will be to turn the user input above into:
-
-- A human friendly feature title in kebab-case (e.g. new-heist-form)
-- A safe git branch name not already taken (e.g. aicockpit/feature/new-heist-form)
-- A detailed markdown spec file under the _specs/ directory
-
-Then save the spec file to disk and print a short summary of what you did.
+Seu objetivo é transformar a entrada do usuário em:
+1. Um título amigável e legível em Title Case (feature_title).
+2. Uma slug segura para Git em kebab-case (feature_slug).
+3. Uma branch Git dedicada (branch_name).
+4. Um arquivo de especificação completo salvo em _specs/<feature_slug>.md estruturado para o pipeline do Hierarchical Reasoning (Context, Epic/Story, Subtasks, Business Rules, Architecture, Edge Cases, Acceptance Criteria).
 
 ## Step 1. Check the current branch
-
-Check the current Git branch, and abort this entire process if there are any uncommitted, unstaged, or untracked files in the working directory. Tell the user to commit or stash changes before proceeding, and DO NOT GO ANY FURTHER.
+1. Verifique o status do Git (git status).
+2. Se houver arquivos modificados, unstaged ou untracked não commitados, alerte o usuário e solicite que faça commit ou stash antes de prosseguir. Não avance sem a árvore de trabalho limpa.
 
 ## Step 2. Parse the arguments
-
-From `$ARGUMENTS`, extract:
-
-1. `feature_title`  
-   - A short, human readable title in Title Case.  
-   - Example: "Card Component for Dashboard Stats".
-
-2. `feature_slug`  
-   - A git safe slug.  
-   - Rules:  
-     - Lowercase 
-     - Kebab-case 
-     - Only `a-z`, `0-9` and `-`  
-     - Replace spaces and punctuation with `-`  
-     - Collapse multiple `-` into one  
-     - Trim `-` from start and end  
-     - Maximum length 40 characters  
-   - Example: `card-component` or `card-component-dashboard`.
-
-3. `branch_name`  
-   - Format: `aicockpit/feature/<feature_slug>`  
-   - Example: `aicockpit/feature/card-component`.
-
-4. `figma_hint` (optional)  
-   - If `$ARGUMENTS` contains the substring `figma:`  
-   - Then the text after `figma:` is the figma component link.  
-   - Trim whitespace.  
-   - Example input:  
-     - `/spec Card component, figma: https://www.figma.com/design/some-link`  
-     - `figma_hint` becomes `https://www.figma.com/design/some-link`.
-
-If you cannot infer a sensible `feature_title` and `feature_slug`, ask the user to clarify instead of guessing.
+A partir de $ARGUMENTS, extraia:
+1. feature_title: Título em Title Case (ex: "Filtro de Medicamentos por Horário").
+2. feature_slug: Slug seguro em minúsculo, kebab-case, somente a-z, 0-9 e -, máximo 40 caracteres (ex: filtro-medicamentos-horario).
+3. branch_name: Formato aicockpit/feature/<feature_slug>.
+4. figma_hint (opcional): Se $ARGUMENTS contiver a substring figma:, extraia o link que segue após ela.
 
 ## Step 2.5 Pull Figma context when needed
-
-If `figma_hint` is present and Figma MCP tools are available:
-
-Use the **figma-design-extractor** subagent to provide a design guide for the feature, citing the `figma hint` and tell it to:
-
-1. Extract only information that is useful for implementation, such as:  
-   - Dimensions and layout (grid, spacing, alignment)  
-   - Key typography tokens (font family, size, weight)  
-   - Color tokens and semantic usage (primary, surface, border, error etc.)  
-   - Border radius, shadows, and any notable visual detail
-   - Icons, buttons, links or other UI elements
-2. Summarise this as 3 to 8 concise bullet points and also leave a link to the figma component for future lookups. 
-3. If lookup fails or the tools are not available, record a note like:  
-   - `"Design reference could not be retrieved. See Figma manually for details."`
-
-Always summarise into human friendly notes.
+Se figma_hint estiver presente e as ferramentas MCP do Figma estiverem disponíveis:
+1. Inspecione o nó ou arquivo alvo (figma_get_component_for_development ou figma_get_file_data e figma_get_variables).
+2. Extraia tokens visuais e cores semânticas (color/*, spacing/*, radius/*), tipografia, dimensões e auto-layout.
+3. Resuma essas restrições como tópicos objetivos na seção Figma Design Reference da spec.
 
 ## Step 3. Switch to a new Git branch
-
-Before making any content, switch to a new Git branch using the `branch_name` derived from the `$ARGUMENTS`. If the branch name is already taken, then append a version number to it: e.g. `aicockpit/feature/card-component-01`
+Troque para uma nova branch Git utilizando branch_name. Se o nome já existir, adicione um sufixo numérico sequencial (ex: aicockpit/feature/<feature_slug>-01).
 
 ## Step 4. Draft the spec content
+Gere o arquivo _specs/<feature_slug>.md seguindo rigorosamente o template abaixo:
 
-Create a markdown spec document that Plan mode can use directly and save it in the _specs folder using the `feature_slug`. Use the exact structure as defined in the spec template file here: @_specs/template.md. Do not add technical implementation details such as code examples.
+1. Título e Metadados (Branch, Camadas Afetadas, Regra de Dependência Arquitetural apps -> hooks -> api -> core, Figma Reference).
+2. Context & Objectives (Objetivo do Épico e User Story).
+3. Subtasks & Dependencies (Tabela com Subtask ID, Descrição, Escopo de Arquivos e Dependências).
+4. Business Rules (Regras Explícitas BR-01, BR-02...).
+5. Technical Requirements & Architecture Constraints (Isolamento de plataforma no core, persistência, design tokens).
+6. Edge Cases (Casos de borda EC-01, EC-02...).
+7. Acceptance Criteria (Tabela com ID, Critério de Aceite e Método de Validação com testes/inspeção).
+8. Testing & Verification Guidelines (Diretrizes para packages/core/src/__tests__/, npm run build, npm run test:run, npm run test:mobile).
 
 ## Step 5. Final output to the user
-
-After the file is saved, respond to the user with a short summary in this exact format:
+Após salvar o arquivo em disco, finalize com o resumo conciso:
 
 Branch: <branch_name>
-Spec file: specs/<feature_slug>.md
+Spec file: _specs/<feature_slug>.md
 Title: <feature_title>
-
-Do not repeat the full spec in the chat output unless the user explicitly asks to see it. The main goal is to save the spec file and report where it lives and what branch name to use.
+Status: Pronto para execução via Hierarchical Reasoning

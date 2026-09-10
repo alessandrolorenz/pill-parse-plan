@@ -1,259 +1,385 @@
 ---
 name: figma-implement-design
-description: Translates Figma designs into production-ready application code with 1:1 visual fidelity. Use when implementing UI code from Figma files, when user mentions "implement design", "generate code", "implement component", provides Figma URLs, or asks to build components matching Figma specs. For Figma canvas writes via `use_figma`, use `figma-use`.
+description: "Translates Figma designs into production-ready application code with 1:1 visual fidelity. Use when implementing UI code from Figma files, when user mentions 'implement design', 'generate code', 'implement component', provides Figma URLs, or asks to build components matching Figma specs. Triggers: 'implement this design', 'generate code from Figma', 'build this component from Figma', 'translate Figma to code', 'implement the design spec', 'code this component'."
 disable-model-invocation: false
 ---
 
-# Implement Design
+# figma-implement-design
 
-## Overview
+Translates Figma designs into production-ready application code with 1:1 visual fidelity. Use when implementing UI code from Figma files, when user mentions "implement design", "generate code", "implement component", provides Figma URLs, or asks to build components matching Figma specs.
 
-This skill provides a structured workflow for translating Figma designs into production-ready code with pixel-perfect accuracy. It ensures consistent integration with the Figma MCP server, proper use of design tokens, and 1:1 visual parity with designs.
+**Triggers**: 'implement this design', 'generate code from Figma', 'build this component from Figma', 'translate Figma to code', 'implement the design spec', 'code this component'.
 
-## Skill Boundaries
+## MCP Requirements
 
-- Use this skill when the deliverable is code in the user's repository.
-- If the user asks to create/edit/delete nodes inside Figma itself, switch to [figma-use](../figma-use/SKILL.md).
-- If the user asks to build or update a full-page screen in Figma from code or a description, switch to [figma-generate-design](../figma-generate-design/SKILL.md).
-- If the user asks only for Code Connect mappings, switch to [figma-code-connect-components](../figma-code-connect-components/SKILL.md).
-- If the user asks to author reusable agent rules (`.aicockpit/rules/`), switch to [figma-create-design-system-rules](../figma-create-design-system-rules/SKILL.md).
+This skill uses **both** Figma MCP servers:
+- **Figma Official MCP** (`figma-windows-cmd`) — `get_design_context`, `get_screenshot`, `get_metadata` for design inspection
+- **Figma Console MCP** (`figma-console-mcp`) — `figma_check_design_parity`, `figma_deep_extract_component`, `figma_get_design_system_kit` for deep analysis and validation
 
-## Prerequisites
+> **Note**: For Console MCP tools (`figma_check_design_parity`, `figma_deep_extract_component`, `figma_get_design_system_kit`), verify the Desktop Bridge is connected first. See the `figma-use` skill for setup verification steps.
 
-- Figma MCP server must be connected and accessible
-- User must provide a Figma URL in the format: `https://figma.com/design/:fileKey/:fileName?node-id=1-2`
-  - `:fileKey` is the file key
-  - `1-2` is the node ID (the specific component or frame to implement)
-- **OR** when using `figma-desktop` MCP: User can select a node directly in the Figma desktop app (no URL required)
-- Project should have an established design system or component library (preferred)
-
-## Required Workflow
-
-**Follow these steps in order. Do not skip steps.**
-
-### Step 1: Get Node ID
-
-#### Option A: Parse from Figma URL
-
-When the user provides a Figma URL, extract the file key and node ID to pass as arguments to MCP tools.
-
-**URL format:** `https://figma.com/design/:fileKey/:fileName?node-id=1-2`
-
-**Extract:**
-
-- **File key:** `:fileKey` (the segment after `/design/`)
-- **Node ID:** `1-2` (the value of the `node-id` query parameter)
-
-**Note:** When using the local desktop MCP (`figma-desktop`), `fileKey` is not passed as a parameter to tool calls. The server automatically uses the currently open file, so only `nodeId` is needed.
-
-**Example:**
-
-- URL: `https://figma.com/design/kL9xQn2VwM8pYrTb4ZcHjF/DesignSystem?node-id=42-15`
-- File key: `kL9xQn2VwM8pYrTb4ZcHjF`
-- Node ID: `42-15`
-
-#### Option B: Use Current Selection from Figma Desktop App (figma-desktop MCP only)
-
-When using the `figma-desktop` MCP and the user has NOT provided a URL, the tools automatically use the currently selected node from the open Figma file in the desktop app.
-
-**Note:** Selection-based prompting only works with the `figma-desktop` MCP server. The remote server requires a link to a frame or layer to extract context. The user must have the Figma desktop app open with a node selected.
-
-### Step 2: Fetch Design Context
-
-Run `get_design_context` with the extracted file key and node ID.
+## Workflow Overview
 
 ```
-get_design_context(fileKey=":fileKey", nodeId="1-2")
+Step 1: Extract Figma URL/Node ID
+Step 2: Get Design Context          → get_design_context (Official MCP)
+Step 3: Deep Component Analysis     → figma_deep_extract_component (Console MCP)
+Step 4: Get Design System Context   → figma_get_design_system_kit (Console MCP)
+Step 5: Take Screenshot             → get_screenshot (Official MCP)
+Step 6: Implement Code              → Write production-ready code
+Step 7: Parity Validation           → figma_check_design_parity (Console MCP) ← NEW
+Step 8: Fix Discrepancies           → Iterate until parity score ≥ 90
 ```
 
-This provides the structured data including:
+## Step 1: Extract Figma URL/Node ID
 
-- Layout properties (Auto Layout, constraints, sizing)
-- Typography specifications
-- Color values and design tokens
-- Component structure and variants
-- Spacing and padding values
+Parse the Figma URL to extract:
+- `fileKey` — the file identifier (between `/file/` and `/` in the URL)
+- `nodeId` — the node identifier (after `?node-id=` in the URL, URL-decoded)
 
-**If the response is too large or truncated:**
-
-1. Run `get_metadata(fileKey=":fileKey", nodeId="1-2")` to get the high-level node map
-2. Identify the specific child nodes needed from the metadata
-3. Fetch individual child nodes with `get_design_context(fileKey=":fileKey", nodeId=":childNodeId")`
-
-### Step 3: Capture Visual Reference
-
-Run `get_screenshot` with the same file key and node ID for a visual reference.
-
+Example URL parsing:
 ```
-get_screenshot(fileKey=":fileKey", nodeId="1-2")
+URL: https://www.figma.com/file/ABC123/MyDesign?node-id=1%3A234
+fileKey: ABC123
+nodeId: 1:234
 ```
 
-This screenshot serves as the source of truth for visual validation. Keep it accessible throughout implementation.
+## Step 2: Get Design Context
 
-### Step 4: Download Required Assets
+```
+get_design_context(nodeId, fileKey)
+```
 
-Download any assets (images, icons, SVGs) returned by the Figma MCP server.
+This returns structured design data including:
+- Node type, name, dimensions
+- Layout properties (auto-layout, padding, spacing)
+- Fill colors and gradients
+- Typography (font family, size, weight, line height)
+- Border radius, stroke, effects
+- Component properties and variants
 
-**IMPORTANT:** Follow these asset rules:
+## Step 3: Deep Component Analysis
 
-- If the Figma MCP server returns a `localhost` source for an image or SVG, use that source directly
-- DO NOT import or add new icon packages - all assets should come from the Figma payload
-- DO NOT use or create placeholders if a `localhost` source is provided
-- Assets are served through the Figma MCP server's built-in assets endpoint
+For components and component sets, get deeper analysis:
 
-### Step 5: Translate to Project Conventions
+```
+figma_deep_extract_component(nodeId, fileKey, depth=3)
+```
 
-Translate the Figma output into this project's framework, styles, and conventions.
+Returns:
+- Complete component structure with all nested layers
+- All variant properties and their values
+- Design token bindings (which variables are bound to which properties)
+- Component API (exposed properties, their types and defaults)
+- Interaction states (hover, focus, active, disabled)
 
-**Key principles:**
+For component sets:
+```
+figma_analyze_component_set(componentSetId, fileKey)
+```
 
-- Treat the Figma MCP output (typically React + Tailwind) as a representation of design and behavior, not as final code style
-- Replace Tailwind utility classes with the project's preferred utilities or design system tokens
-- Reuse existing components (buttons, inputs, typography, icon wrappers) instead of duplicating functionality
-- Use the project's color system, typography scale, and spacing tokens consistently
-- Respect existing routing, state management, and data-fetch patterns
+Returns:
+- Variant matrix (all property combinations)
+- Property axes (e.g., variant × size × state)
+- Coverage gaps (missing variant combinations)
 
-### Step 6: Achieve 1:1 Visual Parity
+## Step 4: Get Design System Context
 
-Strive for pixel-perfect visual parity with the Figma design.
+Understand the design tokens used in the component:
 
-**Guidelines:**
+```
+figma_get_design_system_kit(fileKey, 'summary')
+```
 
-- Prioritize Figma fidelity to match designs exactly
-- Avoid hardcoded values - use design tokens from Figma where available
-- When conflicts arise between design system tokens and Figma specs, prefer design system tokens but adjust spacing or sizes minimally to match visuals
-- Follow WCAG requirements for accessibility
-- Add component documentation as needed
+Extract:
+- Color token names and values used in the component
+- Spacing token names and values
+- Typography token names and values
+- Map token names to CSS custom properties or design system variables
 
-### Step 7: Validate Against Figma
+## Step 5: Take Screenshot
 
-Before marking complete, validate the final UI against the Figma screenshot.
+```
+get_screenshot(nodeId)
+```
 
-**Validation checklist:**
+Use the screenshot as the visual reference throughout implementation. Compare your code output against this screenshot.
 
-- [ ] Layout matches (spacing, alignment, sizing)
-- [ ] Typography matches (font, size, weight, line height)
-- [ ] Colors match exactly
-- [ ] Interactive states work as designed (hover, active, disabled)
-- [ ] Responsive behavior follows Figma constraints
-- [ ] Assets render correctly
-- [ ] Accessibility standards met
+## Step 6: Implement Code
 
-## Implementation Rules
+### Framework Detection
+Determine the target framework from the project context:
+- React + TypeScript (most common)
+- Vue 3 + TypeScript
+- Angular
+- Vanilla HTML/CSS
+- React Native
 
-### Component Organization
+### Implementation Rules
 
-- Place UI components in the project's designated design system directory
-- Follow the project's component naming conventions
-- Avoid inline styles unless truly necessary for dynamic values
+#### 1. Use Design Tokens, Not Hardcoded Values
+```typescript
+// ✅ Correct — use design tokens
+const Button = styled.button`
+  background: var(--color-background-primary);
+  padding: var(--spacing-component-padding-md);
+  border-radius: var(--radius-md);
+`;
 
-### Design System Integration
+// ❌ Wrong — hardcoded values
+const Button = styled.button`
+  background: #2563EB;
+  padding: 10px 20px;
+  border-radius: 8px;
+`;
+```
 
-- ALWAYS use components from the project's design system when possible
-- Map Figma design tokens to project design tokens
-- When a matching component exists, extend it rather than creating a new one
-- Document any new components added to the design system
+#### 2. Map Figma Auto-Layout to CSS Flexbox
+```
+Figma Auto-Layout → CSS
+─────────────────────────────────────────
+layoutMode: HORIZONTAL → flex-direction: row
+layoutMode: VERTICAL   → flex-direction: column
+primaryAxisAlignItems: MIN         → justify-content: flex-start
+primaryAxisAlignItems: CENTER      → justify-content: center
+primaryAxisAlignItems: MAX         → justify-content: flex-end
+primaryAxisAlignItems: SPACE_BETWEEN → justify-content: space-between
+counterAxisAlignItems: MIN         → align-items: flex-start
+counterAxisAlignItems: CENTER      → align-items: center
+counterAxisAlignItems: MAX         → align-items: flex-end
+itemSpacing: N                     → gap: Npx
+paddingTop/Bottom/Left/Right: N    → padding: Npx
+```
 
-### Code Quality
+#### 3. Map Figma Typography to CSS
+```
+Figma Typography → CSS
+─────────────────────────────────────────
+fontFamily: "Inter"     → font-family: 'Inter', sans-serif
+fontSize: 16            → font-size: 1rem (or 16px)
+fontWeight: 600         → font-weight: 600
+lineHeight: 24          → line-height: 1.5 (or 24px)
+letterSpacing: 0.5      → letter-spacing: 0.5px
+textAlignHorizontal: CENTER → text-align: center
+```
 
-- Avoid hardcoded values - extract to constants or design tokens
-- Keep components composable and reusable
-- Add TypeScript types for component props
-- Include JSDoc comments for exported components
+#### 4. Map Figma Effects to CSS
+```
+Figma Effects → CSS
+─────────────────────────────────────────
+DROP_SHADOW: { x:0, y:4, blur:8, color:{r,g,b,a} }
+  → box-shadow: 0 4px 8px rgba(r*255, g*255, b*255, a)
+INNER_SHADOW → box-shadow: inset ...
+LAYER_BLUR: { radius: 8 } → filter: blur(8px)
+BACKGROUND_BLUR: { radius: 8 } → backdrop-filter: blur(8px)
+```
 
-## Examples
+#### 5. Component Variants → Props
+```typescript
+// Figma component set with variant=primary|secondary|destructive, size=sm|md|lg
+interface ButtonProps {
+  variant?: 'primary' | 'secondary' | 'destructive';
+  size?: 'sm' | 'md' | 'lg';
+  disabled?: boolean;
+  children: React.ReactNode;
+  onClick?: () => void;
+}
+```
 
-### Example 1: Implementing a Button Component
+### React Component Template
+```typescript
+import React from 'react';
+import styles from './ComponentName.module.css';
 
-User says: "Implement this Figma button component: https://figma.com/design/kL9xQn2VwM8pYrTb4ZcHjF/DesignSystem?node-id=42-15"
+interface ComponentNameProps {
+  // Props derived from Figma component properties
+  variant?: 'primary' | 'secondary';
+  size?: 'sm' | 'md' | 'lg';
+  children?: React.ReactNode;
+}
 
-**Actions:**
+export const ComponentName: React.FC<ComponentNameProps> = ({
+  variant = 'primary',
+  size = 'md',
+  children,
+}) => {
+  return (
+    <div className={`${styles.root} ${styles[variant]} ${styles[size]}`}>
+      {children}
+    </div>
+  );
+};
 
-1. Parse URL to extract fileKey=`kL9xQn2VwM8pYrTb4ZcHjF` and nodeId=`42-15`
-2. Run `get_design_context(fileKey="kL9xQn2VwM8pYrTb4ZcHjF", nodeId="42-15")`
-3. Run `get_screenshot(fileKey="kL9xQn2VwM8pYrTb4ZcHjF", nodeId="42-15")` for visual reference
-4. Download any button icons from the assets endpoint
-5. Check if project has existing button component
-6. If yes, extend it with new variant; if no, create new component using project conventions
-7. Map Figma colors to project design tokens (e.g., `primary-500`, `primary-hover`)
-8. Validate against screenshot for padding, border radius, typography
+export default ComponentName;
+```
 
-**Result:** Button component matching Figma design, integrated with project design system.
+### CSS Module Template
+```css
+/* ComponentName.module.css */
+.root {
+  /* Base styles from Figma */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  /* Use design tokens */
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
 
-### Example 2: Building a Dashboard Layout
+.primary {
+  background: var(--color-background-primary);
+  color: var(--color-text-inverse);
+}
 
-User says: "Build this dashboard: https://figma.com/design/pR8mNv5KqXzGwY2JtCfL4D/Dashboard?node-id=10-5"
+.secondary {
+  background: transparent;
+  border: 1px solid var(--color-border-default);
+  color: var(--color-text-primary);
+}
 
-**Actions:**
+.sm { padding: var(--spacing-2) var(--spacing-4); font-size: var(--font-size-sm); }
+.md { padding: var(--spacing-3) var(--spacing-6); font-size: var(--font-size-base); }
+.lg { padding: var(--spacing-4) var(--spacing-8); font-size: var(--font-size-lg); }
+```
 
-1. Parse URL to extract fileKey=`pR8mNv5KqXzGwY2JtCfL4D` and nodeId=`10-5`
-2. Run `get_metadata(fileKey="pR8mNv5KqXzGwY2JtCfL4D", nodeId="10-5")` to understand the page structure
-3. Identify main sections from metadata (header, sidebar, content area, cards) and their child node IDs
-4. Run `get_design_context(fileKey="pR8mNv5KqXzGwY2JtCfL4D", nodeId=":childNodeId")` for each major section
-5. Run `get_screenshot(fileKey="pR8mNv5KqXzGwY2JtCfL4D", nodeId="10-5")` for the full page
-6. Download all assets (logos, icons, charts)
-7. Build layout using project's layout primitives
-8. Implement each section using existing components where possible
-9. Validate responsive behavior against Figma constraints
+## Step 7: Parity Validation (NEW — Console MCP)
 
-**Result:** Complete dashboard matching Figma design with responsive layout.
+After implementing the component, validate it against the Figma design:
 
-## Best Practices
+```
+figma_check_design_parity(nodeId, codeData, fileKey)
+```
 
-### Always Start with Context
+Where `codeData` is the extracted CSS/style data from your implementation:
+```json
+{
+  "backgroundColor": "#2563EB",
+  "padding": "10px 20px",
+  "borderRadius": "8px",
+  "fontSize": "14px",
+  "fontWeight": "500",
+  "color": "#FFFFFF",
+  "display": "flex",
+  "alignItems": "center",
+  "gap": "8px"
+}
+```
 
-Never implement based on assumptions. Always fetch `get_design_context` and `get_screenshot` first.
+### Interpreting the Parity Score
 
-### Incremental Validation
+| Score | Status | Action |
+|-------|--------|--------|
+| 90-100 | ✅ Ship-ready | Implementation matches design |
+| 70-89 | ⚠️ Minor fixes | Address minor discrepancies |
+| 50-69 | 🔶 Significant gaps | Fix major issues before shipping |
+| < 50 | ❌ Major rework | Significant implementation issues |
 
-Validate frequently during implementation, not just at the end. This catches issues early.
+### Discrepancy Categories
 
-### Document Deviations
+The tool returns discrepancies in 8 categories:
+1. **visual** — Color, opacity, fill differences
+2. **spacing** — Padding, margin, gap differences
+3. **typography** — Font size, weight, family differences
+4. **tokens** — Wrong or missing design token usage
+5. **component-api** — Missing props or wrong prop types
+6. **accessibility** — Missing ARIA attributes, contrast issues
+7. **naming** — Component/prop naming doesn't match design
+8. **metadata** — Missing documentation, descriptions
 
-If you must deviate from the Figma design (e.g., for accessibility or technical constraints), document why in code comments.
+### Severity Levels
+- **critical** — Must fix before shipping (e.g., wrong color, broken layout)
+- **major** — Should fix (e.g., wrong spacing, missing variant)
+- **minor** — Nice to fix (e.g., slightly off border radius)
+- **info** — Informational (e.g., naming suggestion)
 
-### Reuse Over Recreation
+## Step 8: Fix Discrepancies
 
-Always check for existing components before creating new ones. Consistency across the codebase is more important than exact Figma replication.
+For each critical and major discrepancy:
 
-### Design System First
+1. Identify the affected CSS property
+2. Get the correct value from the Figma design context (Step 2-3)
+3. Update the implementation
+4. Re-run `figma_check_design_parity` to verify the fix
 
-When in doubt, prefer the project's design system patterns over literal Figma translation.
+Iterate until parity score ≥ 90 (or all critical/major issues resolved).
 
-## Common Issues and Solutions
+## Design Token Mapping
 
-### Issue: Figma output is truncated
+When the Figma component uses design tokens, map them to your project's token system:
 
-**Cause:** The design is too complex or has too many nested layers to return in a single response.
-**Solution:** Use `get_metadata` to get the node structure, then fetch specific nodes individually with `get_design_context`.
+```
+Figma Variable Name          → CSS Custom Property
+─────────────────────────────────────────────────────
+color/background/primary     → --color-background-primary
+color/text/primary           → --color-text-primary
+spacing/component/padding-md → --spacing-component-padding-md
+font-size/base               → --font-size-base
+radius/md                    → --radius-md
+```
 
-### Issue: Design doesn't match after implementation
+If the project uses a different token system (e.g., Tailwind, Chakra UI, MUI), map accordingly:
+```
+Figma Variable              → Tailwind Class
+─────────────────────────────────────────────
+color/blue/600              → bg-blue-600
+spacing/4 (16px)            → p-4
+font-size/base (16px)       → text-base
+radius/md (8px)             → rounded-md
+```
 
-**Cause:** Visual discrepancies between the implemented code and the original Figma design.
-**Solution:** Compare side-by-side with the screenshot from Step 3. Check spacing, colors, and typography values in the design context data.
+## Accessibility Requirements
 
-### Issue: Assets not loading
+Always include accessibility attributes based on the Figma design:
 
-**Cause:** The Figma MCP server's assets endpoint is not accessible or the URLs are being modified.
-**Solution:** Verify the Figma MCP server's assets endpoint is accessible. The server serves assets at `localhost` URLs. Use these directly without modification.
+```typescript
+// Buttons
+<button
+  type="button"
+  aria-label={ariaLabel || children}
+  aria-disabled={disabled}
+  disabled={disabled}
+>
 
-### Issue: Design token values differ from Figma
+// Form inputs
+<input
+  id={id}
+  aria-label={label}
+  aria-describedby={errorId}
+  aria-invalid={hasError}
+/>
 
-**Cause:** The project's design system tokens have different values than those specified in the Figma design.
-**Solution:** When project tokens differ from Figma values, prefer project tokens for consistency but adjust spacing/sizing to maintain visual fidelity.
+// Interactive elements
+<div
+  role="button"
+  tabIndex={0}
+  aria-pressed={isPressed}
+  onKeyDown={(e) => e.key === 'Enter' && onClick?.()}
+/>
+## Error Handling
 
-## Understanding Design Implementation
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `get_design_context` returns empty | Node ID incorrect or file not accessible | Re-parse the Figma URL; verify fileKey and nodeId |
+| `figma_deep_extract_component` fails | Desktop Bridge not connected | Activate Figma Console MCP Bridge plugin in Figma |
+| `figma_check_design_parity` returns score 0 | `codeData` object is empty or malformed | Ensure codeData has at least 3 CSS properties |
+| Parity score stuck below 90 after 3 iterations | Fundamental design mismatch | Review the Figma design context again; check if using correct node ID |
+| Font not rendering correctly | Font not loaded in browser | Verify font is imported; check font-family name matches exactly |
+| Design tokens not resolving | CSS custom properties not defined | Ensure token CSS file is imported in the component |
 
-The Figma implementation workflow establishes a reliable process for translating designs to code:
+```
 
-**For designers:** Confidence that implementations will match their designs with pixel-perfect accuracy.
-**For developers:** A structured approach that eliminates guesswork and reduces back-and-forth revisions.
-**For teams:** Consistent, high-quality implementations that maintain design system integrity.
+## Completion Checklist
 
-By following this workflow, you ensure that every Figma design is implemented with the same level of care and attention to detail.
-
-## Additional Resources
-
-- [Figma MCP Server Documentation](https://developers.figma.com/docs/figma-mcp-server/)
-- [Figma MCP Server Tools and Prompts](https://developers.figma.com/docs/figma-mcp-server/tools-and-prompts/)
-- [Figma Variables and Design Tokens](https://help.figma.com/hc/en-us/articles/15339657135383-Guide-to-variables-in-Figma)
+Before marking the task complete:
+- [ ] Design context extracted from Figma
+- [ ] Deep component analysis completed
+- [ ] Design tokens identified and mapped
+- [ ] Screenshot taken as visual reference
+- [ ] Component implemented with correct structure
+- [ ] All variants/states implemented
+- [ ] Design tokens used (not hardcoded values)
+- [ ] Accessibility attributes added
+- [ ] Parity validation run with score ≥ 90
+- [ ] All critical and major discrepancies resolved
+- [ ] Code is production-ready (TypeScript types, exports, etc.)

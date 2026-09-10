@@ -1,315 +1,367 @@
 ---
 name: figma-generate-library
-description: "Build or update a professional-grade design system in Figma from a codebase. Use when the user wants to create variables/tokens, build component libraries, set up theming (light/dark modes), document foundations, or reconcile gaps between code and Figma. This skill teaches WHAT to build and in WHAT ORDER — it complements the `figma-use` skill which teaches HOW to call the Plugin API. Both skills should be loaded together."
+description: "Build or update a professional-grade design system in Figma from a codebase. Use when the user wants to create variables/tokens, build component libraries, set up theming (light/dark modes), document foundations, or reconcile gaps between code and Figma. Triggers: 'build design system in Figma', 'create design tokens', 'set up variables', 'create component library', 'build theme', 'create light/dark mode', 'sync design system to Figma', 'generate Figma library from code'."
 disable-model-invocation: false
 ---
 
-# Design System Builder — Figma MCP Skill
+# figma-generate-library
 
-Build professional-grade design systems in Figma that match code. This skill orchestrates multi-phase workflows across 20–100+ `use_figma` calls, enforcing quality patterns from real-world design systems (Material 3, Polaris, Figma UI3, Simple DS).
+Build or update a professional-grade design system in Figma from a codebase. Use when the user wants to create variables/tokens, build component libraries, set up theming (light/dark modes), document foundations, or reconcile gaps between code and Figma.
 
-**Prerequisites**: The `figma-use` skill MUST also be loaded for every `use_figma` call. It provides Plugin API syntax rules (return pattern, page reset, ID return, font loading, color range). This skill provides design system domain knowledge and workflow orchestration.
+**Triggers**: 'build design system in Figma', 'create design tokens', 'set up variables', 'create component library', 'build theme', 'create light/dark mode', 'sync design system to Figma', 'generate Figma library from code'.
 
-**Always pass `skillNames: "figma-generate-library"` when calling `use_figma` as part of this skill.** This is a logging parameter — it does not affect execution.
+## MCP Requirements
 
----
+This skill uses **Figma Console MCP** as the primary server:
+- **Figma Console MCP** (`figma-console-mcp`) — All token/variable creation, component building, batch operations
+- **Figma Official MCP** (`figma-windows-cmd`) — `get_screenshot` for visual verification only
 
-## 1. The One Rule That Matters Most
+**Load `figma-use` skill first** — it provides setup verification and the complete tool reference.
 
-**This is NEVER a one-shot task.** Building a design system requires 20–100+ `use_figma` calls across multiple phases, with mandatory user checkpoints between them. Any attempt to create everything in one call WILL produce broken, incomplete, or unrecoverable results. Break every operation to the smallest useful unit, validate, get feedback, proceed.
+## Why Console MCP for Library Building
 
----
+Console MCP's batch tools make library building dramatically faster:
+- `figma_batch_create_variables` — Create 10-50 variables in ONE call (vs 50 individual calls)
+- `figma_batch_update_variables` — Update 10-50 variables in ONE call
+- `figma_setup_design_tokens` — Full token setup (collections + variables) in ONE call
+- `figma_arrange_component_set` — Auto-arrange all variants in a grid in ONE call
 
-## 2. Mandatory Workflow
-
-Every design system build follows this phase order. Skipping or reordering phases causes structural failures that are expensive to undo.
-
-```
-Phase 0: DISCOVERY (always first — no use_figma writes yet)
-  0a. Analyze codebase → extract tokens, components, naming conventions
-  0b. Inspect Figma file → pages, variables, components, styles, existing conventions
-  0c. Search subscribed libraries → use search_design_system for reusable assets
-  0d. Lock v1 scope → agree on exact token set + component list before any creation
-  0e. Map code → Figma → resolve conflicts (code and Figma disagree = ask user)
-  ✋ USER CHECKPOINT: present full plan, await explicit approval
-
-Phase 1: FOUNDATIONS (tokens first — always before components)
-  1a. Create variable collections and modes
-  1b. Create primitive variables (raw values, 1 mode)
-  1c. Create semantic variables (aliased to primitives, mode-aware)
-  1d. Set scopes on ALL variables
-  1e. Set code syntax on ALL variables
-  1f. Create effect styles (shadows) and text styles (typography)
-  → Exit criteria: every token from the agreed plan exists, all scopes set, all code syntax set
-  ✋ USER CHECKPOINT: show variable summary, await approval
-
-Phase 2: FILE STRUCTURE (before components)
-  2a. Create page skeleton: Cover → Getting Started → Foundations → --- → Components → --- → Utilities
-  2b. Create foundations documentation pages (color swatches, type specimens, spacing bars)
-  → Exit criteria: all planned pages exist, foundations docs are navigable
-  ✋ USER CHECKPOINT: show page list + screenshot, await approval
-
-Phase 3: COMPONENTS (one at a time — never batch)
-  For EACH component (in dependency order: atoms before molecules):
-    3a. Create dedicated page
-    3b. Build base component with auto-layout + full variable bindings
-    3c. Create all variant combinations (combineAsVariants + grid layout)
-    3d. Add component properties (TEXT, BOOLEAN, INSTANCE_SWAP)
-    3e. Link properties to child nodes
-    3f. Add page documentation (title, description, usage notes)
-    3g. Validate: get_metadata (structure) + get_screenshot (visual)
-    3h. Optional: lightweight Code Connect mapping while context is fresh
-    → Exit criteria: variant count correct, all bindings verified, screenshot looks right
-    ✋ USER CHECKPOINT per component: show screenshot, await approval before next component
-
-Phase 4: INTEGRATION + QA (final pass)
-  4a. Finalize all Code Connect mappings
-  4b. Accessibility audit (contrast, min touch targets, focus visibility)
-  4c. Naming audit (no duplicates, no unnamed nodes, consistent casing)
-  4d. Unresolved bindings audit (no hardcoded fills/strokes remaining)
-  4e. Final review screenshots of every page
-  ✋ USER CHECKPOINT: complete sign-off
-```
-
----
-
-## 3. Critical Rules
-
-**Plugin API basics** (from use_figma skill — enforced here too):
-- Use `return` to send data back (auto-serialized). Do NOT wrap in IIFE or call closePlugin.
-- Return ALL created/mutated node IDs in every return value
-- Page context resets each call — always `await figma.setCurrentPageAsync(page)` at start
-- `figma.notify()` throws — never use it
-- Colors are 0–1 range, not 0–255
-- Font MUST be loaded before any text write: `await figma.loadFontAsync({family, style})`. Use `await figma.listAvailableFontsAsync()` to discover available fonts and verify exact style strings — if a load fails, query available fonts to find the correct name or a fallback.
-
-**Design system rules**:
-1. **Variables BEFORE components** — components bind to variables. No token = no component.
-2. **Inspect before creating** — run read-only `use_figma` to discover existing conventions. Match them.
-3. **One page per component** *(default)* — exception: tightly related families (e.g., Input + helpers) may share a page with clear section separation.
-4. **Bind visual properties to variables** *(default)* — fills, strokes, padding, radius, gap. Exceptions: intentionally fixed geometry (icon pixel-grid sizes, static dividers).
-5. **Scopes on every variable** — NEVER leave as `ALL_SCOPES`. Background: `FRAME_FILL, SHAPE_FILL`. Text: `TEXT_FILL`. Border: `STROKE_COLOR`. Spacing: `GAP`. Radii: `CORNER_RADIUS`. Primitives: `[]` (hidden).
-6. **Code syntax on every variable** — WEB syntax MUST use the `var()` wrapper: `var(--color-bg-primary)`, not `--color-bg-primary`. Use the actual CSS variable name from the codebase. ANDROID/iOS do NOT use a wrapper.
-7. **Alias semantics to primitives** — `{ type: 'VARIABLE_ALIAS', id: primitiveVar.id }`. Never duplicate raw values in semantic layer.
-8. **Position variants after combineAsVariants** — they stack at (0,0). Manually grid-layout + resize.
-9. **INSTANCE_SWAP for icons** — never create a variant per icon. Cap variant matrices: if Size × Style × State > 30 combinations, split into sub-component.
-10. **Deterministic naming** — use consistent, unique node names for idempotent cleanup and resumability. Track created node IDs via return values and the state ledger.
-11. **No destructive cleanup** — cleanup scripts identify nodes by name convention or returned IDs, not by guessing.
-12. **Validate before proceeding** — never build on unvalidated work. `get_metadata` after every create, `get_screenshot` after each component.
-13. **NEVER parallelize `use_figma` calls** — Figma state mutations must be strictly sequential. Even if your tool supports parallel calls, never run two use_figma calls simultaneously.
-14. **Never hallucinate Node IDs** — always read IDs from the state ledger returned by previous calls. Never reconstruct or guess an ID from memory.
-15. **Use the helper scripts** — embed scripts from `scripts/` into your use_figma calls. Don't write 200-line inline scripts from scratch.
-16. **Explicit phase approval** — at each checkpoint, name the next phase explicitly. "looks good" is not approval to proceed to Phase 3 if you asked about Phase 1.
-
----
-
-## 4. State Management (Required for Long Workflows)
-
-> **`getPluginData()` / `setPluginData()` are NOT supported in `use_figma`.** Use `getSharedPluginData()` / `setSharedPluginData()` instead (these ARE supported), or use name-based lookups and the state ledger (returned IDs).
-
-| Entity type | Idempotency key | How to check existence |
-|-------------|----------------|----------------------|
-| Scene nodes (pages, frames, components) | `setSharedPluginData('dsb', 'key', value)` or unique name | `node.getSharedPluginData('dsb', 'key')` or `page.findOne(n => n.name === 'Button')` |
-| Variables | Name within collection | `(await figma.variables.getLocalVariablesAsync()).find(v => v.name === name && v.variableCollectionId === collId)` |
-| Styles | Name | `getLocalTextStyles().find(s => s.name === name)` |
-
-Tag every created **scene node** immediately after creation:
-```javascript
-node.setSharedPluginData('dsb', 'run_id', RUN_ID);        // identifies this build run
-node.setSharedPluginData('dsb', 'phase', 'phase3');        // which phase created it
-node.setSharedPluginData('dsb', 'key', 'component/button');// unique logical key
-```
-
-**State persistence**: Do NOT rely solely on conversation context for the state ledger. Write it to disk:
-```
-/tmp/dsb-state-{RUN_ID}.json
-```
-Re-read this file at the start of every turn. In long workflows, conversation context will be truncated — the file is the source of truth.
-
-Maintain a state ledger tracking:
-```json
-{
-  "runId": "ds-build-2024-001",
-  "phase": "phase3",
-  "step": "component-button",
-  "entities": {
-    "collections": { "primitives": "id:...", "color": "id:..." },
-    "variables": { "color/bg/primary": "id:...", "spacing/sm": "id:..." },
-    "pages": { "Cover": "id:...", "Button": "id:..." },
-    "components": { "Button": "id:..." }
-  },
-  "pendingValidations": ["Button:screenshot"],
-  "completedSteps": ["phase0", "phase1", "phase2", "component-avatar"]
-}
-```
-
-**Idempotency check** before every create: query by name + state ledger ID. If exists, skip or update — never duplicate.
-
-**Resume protocol**: at session start or after context truncation, run a read-only `use_figma` to scan all pages, components, variables, and styles by name to reconstruct the `{key → id}` map. Then re-read the state file from disk if available.
-
-**Continuation prompt** (give this to the user when resuming in a new chat):
-> "I'm continuing a design system build. Run ID: {RUN_ID}. Load the figma-generate-library skill and resume from the last completed step."
-
----
-
-## 5. search_design_system — Reuse Decision Matrix
-
-Search FIRST in Phase 0, then again immediately before each component creation.
+## Workflow Overview
 
 ```
-search_design_system({ query, fileKey, includeComponents: true, includeVariables: true, includeStyles: true })
+Phase 1: Audit & Plan          → figma_get_design_system_kit (discover existing)
+Phase 2: Token Foundation      → figma_setup_design_tokens OR batch create
+Phase 3: Semantic Tokens       → figma_batch_create_variables (semantic layer)
+Phase 4: Component Building    → figma_create_frame + figma_instantiate_component
+Phase 5: Variant Organization  → figma_arrange_component_set
+Phase 6: Documentation         → figma_generate_component_doc (Console MCP)
+Phase 7: Verification          → get_screenshot (Official MCP)
 ```
 
-**Reuse if** all of these are true:
-- Component property API matches your needs (same variant axes, compatible types)
-- Token binding model is compatible (uses same or aliasable variables)
-- Naming conventions match the target file
-- Component is editable (not locked in a remote library you don't own)
+## Phase 1: Audit & Plan
 
-**Rebuild if** any of these:
-- API incompatibility (different property names, wrong variant model)
-- Token model incompatible (hardcoded values, different variable schema)
-- Ownership issue (can't modify the library)
-
-**Wrap if** visual match but API incompatible:
-- Import the library component as a nested instance inside a new wrapper component
-- Expose a clean API on the wrapper
-
-**Three-way priority**: local existing → subscribed library import → create new.
-
----
-
-## 6. User Checkpoints
-
-Mandatory. Design decisions require human judgment.
-
-| After | Required artifacts | Ask |
-|-------|-------------------|-----|
-| Discovery + scope lock | Token list, component list, gap analysis | "Here's my plan. Approve before I create anything?" |
-| Foundations | Variable summary (N collections, M vars, K modes), style list | "All tokens created. Review before file structure?" |
-| File structure | Page list + screenshot | "Pages set up. Review before components?" |
-| Each component | get_screenshot of component page | "Here's [Component] with N variants. Correct?" |
-| Each conflict (code ≠ Figma) | Show both versions | "Code says X, Figma has Y. Which wins?" |
-| Final QA | Per-page screenshots + audit report | "Complete. Sign off?" |
-
-**If user rejects**: fix before moving on. Never build on rejected work.
-
----
-
-## 7. Naming Conventions
-
-Match existing file conventions. If starting fresh:
-
-**Variables** (slash-separated):
+### Step 1.1 — Discover Existing Design System
 ```
-color/bg/primary     color/text/secondary    color/border/default
-spacing/xs  spacing/sm  spacing/md  spacing/lg  spacing/xl  spacing/2xl
-radius/none  radius/sm  radius/md  radius/lg  radius/full
-typography/body/font-size    typography/heading/line-height
+figma_get_design_system_kit(fileKey, 'full')
 ```
 
-**Primitives**: `blue/50` → `blue/900`, `gray/50` → `gray/900`
+Analyze the response to identify:
+- Existing variable collections (avoid duplicates)
+- Existing components (avoid recreating)
+- Missing tokens (gaps to fill)
+- Naming conventions in use
 
-**Component names**: `Button`, `Input`, `Card`, `Avatar`, `Badge`, `Checkbox`, `Toggle`
-
-**Variant names**: `Property=Value, Property=Value` — e.g., `Size=Medium, Style=Primary, State=Default`
-
-**Page separators**: `---` (most common) or `——— COMPONENTS ———`
-
-> Full naming reference: [naming-conventions.md](references/naming-conventions.md)
-
----
-
-## 8. Token Architecture
-
-| Complexity | Pattern |
-|-----------|---------|
-| < 50 tokens | Single collection, 2 modes (Light/Dark) |
-| 50–200 tokens | **Standard**: Primitives (1 mode) + Color semantic (Light/Dark) + Spacing (1 mode) + Typography (1 mode) |
-| 200+ tokens | **Advanced**: Multiple semantic collections, 4–8 modes (Light/Dark × Contrast × Brand). See M3 pattern in [token-creation.md](references/token-creation.md) |
-
-Standard pattern (recommended starting point):
+### Step 1.2 — Initialize State Ledger
 ```
-Collection: "Primitives"    modes: ["Value"]
-  blue/500 = #3B82F6, gray/900 = #111827, ...
-
-Collection: "Color"         modes: ["Light", "Dark"]
-  color/bg/primary → Light: alias Primitives/white, Dark: alias Primitives/gray-900
-  color/text/primary → Light: alias Primitives/gray-900, Dark: alias Primitives/white
-
-Collection: "Spacing"       modes: ["Value"]
-  spacing/xs = 4, spacing/sm = 8, spacing/md = 16, ...
+## Library Build State Ledger
+- File: [fileKey]
+- Existing Collections: [list]
+- Existing Components: [count]
+- Collections to Create: [list]
+- Components to Build: [list]
+- Phase: 1 - Audit
 ```
 
----
+### Step 1.3 — Plan Token Architecture
+Design the token hierarchy before creating:
+```
+Primitives (raw values)
+  └── Colors: color/blue/100, color/blue/200, ... color/blue/900
+  └── Spacing: spacing/1 (4px), spacing/2 (8px), ... spacing/16 (64px)
+  └── Typography: font-size/xs (12px), font-size/sm (14px), ...
+  └── Radius: radius/sm (4px), radius/md (8px), radius/lg (16px)
 
-## 9. Per-Phase Anti-Patterns
+Semantic (purpose-based, reference primitives)
+  └── color/background/primary → color/blue/600
+  └── color/text/primary → color/gray/900
+  └── color/border/default → color/gray/200
+  └── spacing/component/padding → spacing/4
 
-**Phase 0 anti-patterns:**
-- ❌ Starting to create anything before scope is locked with user
-- ❌ Ignoring existing file conventions and imposing new ones
-- ❌ Skipping `search_design_system` before planning component creation
+Component (component-specific, reference semantic)
+  └── button/background → color/background/primary
+  └── button/text → color/text/inverse
+  └── button/padding-x → spacing/component/padding
+```
 
-**Phase 1 anti-patterns:**
-- ❌ Using `ALL_SCOPES` on any variable
-- ❌ Duplicating raw values in semantic layer instead of aliasing
-- ❌ Not setting code syntax (breaks Dev Mode and round-tripping)
-- ❌ Creating component tokens before agreeing on token taxonomy
+## Phase 2: Token Foundation (Primitive Tokens)
 
-**Phase 2 anti-patterns:**
-- ❌ Skipping the cover page or foundations docs
-- ❌ Putting multiple unrelated components on one page
+### Option A: Full Setup in One Call
+```
+figma_setup_design_tokens({
+  collections: [
+    {
+      name: "Primitives",
+      modes: ["Value"],
+      variables: [
+        { name: "color/blue/100", type: "COLOR", values: { Value: "#EFF6FF" } },
+        { name: "color/blue/200", type: "COLOR", values: { Value: "#DBEAFE" } },
+        { name: "color/blue/500", type: "COLOR", values: { Value: "#3B82F6" } },
+        { name: "color/blue/600", type: "COLOR", values: { Value: "#2563EB" } },
+        { name: "color/blue/900", type: "COLOR", values: { Value: "#1E3A8A" } },
+        { name: "spacing/1", type: "FLOAT", values: { Value: 4 } },
+        { name: "spacing/2", type: "FLOAT", values: { Value: 8 } },
+        { name: "spacing/4", type: "FLOAT", values: { Value: 16 } },
+        { name: "spacing/8", type: "FLOAT", values: { Value: 32 } }
+      ]
+    }
+  ]
+})
+```
 
-**Phase 3 anti-patterns:**
-- ❌ Creating components before foundations exist
-- ❌ Hardcoding any fill/stroke/spacing/radius value in a component
-- ❌ Creating a variant per icon (use INSTANCE_SWAP instead)
-- ❌ Not positioning variants after combineAsVariants (they all stack at 0,0)
-- ❌ Building variant matrix > 30 without splitting (variant explosion)
-- ❌ Importing remote components then immediately detaching them
+### Option B: Batch Create (for large token sets)
+```
+Step 2.1: Create collection
+  figma_create_variable_collection("Primitives", ["Value"])
+  → get collectionId
 
-**General anti-patterns:**
-- ❌ Retrying a failed script without understanding the error first
-- ❌ Using name-prefix matching for cleanup (deletes user-owned nodes)
-- ❌ Building on unvalidated work from the previous step
-- ❌ Skipping user checkpoints to "save time"
-- ❌ Parallelizing use_figma calls (always sequential)
-- ❌ Guessing/hallucinating node IDs from memory (always read from state ledger)
-- ❌ Writing massive inline scripts instead of using the provided helper scripts
-- ❌ Starting Phase 3 because the user said "build the button" without completing Phases 0-2
+Step 2.2: Batch create color tokens (up to 50 per call)
+  figma_batch_create_variables(collectionId, [
+    { name: "color/blue/100", type: "COLOR", values: { Value: "#EFF6FF" } },
+    { name: "color/blue/200", type: "COLOR", values: { Value: "#DBEAFE" } },
+    ... (up to 50 per batch)
+  ])
 
----
+Step 2.3: Batch create spacing tokens
+  figma_batch_create_variables(collectionId, [
+    { name: "spacing/1", type: "FLOAT", values: { Value: 4 } },
+    { name: "spacing/2", type: "FLOAT", values: { Value: 8 } },
+    ...
+  ])
 
-## 10. Reference Docs
+Step 2.4: Batch create typography tokens
+  figma_batch_create_variables(collectionId, [
+    { name: "font-size/xs", type: "FLOAT", values: { Value: 12 } },
+    { name: "font-size/sm", type: "FLOAT", values: { Value: 14 } },
+    { name: "font-size/base", type: "FLOAT", values: { Value: 16 } },
+    { name: "font-size/lg", type: "FLOAT", values: { Value: 18 } },
+    { name: "font-size/xl", type: "FLOAT", values: { Value: 20 } },
+    { name: "font-size/2xl", type: "FLOAT", values: { Value: 24 } },
+    ...
+  ])
+```
 
-Load on demand — each reference is authoritative for its phase:
+**CRITICAL**: Always use `figma_batch_create_variables` for 2+ variables. Never use individual `figma_create_variable` calls in a loop.
 
-Use your file reading tool to read these docs when needed. Do not assume their contents from the filename.
+## Phase 3: Semantic Tokens (Theme Layer)
 
-| Doc | Phase | Required / Optional | Load when |
-|-----|-------|---------------------|-----------|
-| [discovery-phase.md](references/discovery-phase.md) | 0 | **Required** | Starting any build — codebase analysis + Figma inspection |
-| [token-creation.md](references/token-creation.md) | 1 | **Required** | Creating variables, collections, modes, styles |
-| [documentation-creation.md](references/documentation-creation.md) | 2 | Required | Creating cover page, foundations docs, swatches |
-| [component-creation.md](references/component-creation.md) | 3 | **Required** | Creating any component or variant |
-| [code-connect-setup.md](references/code-connect-setup.md) | 3–4 | Required | Setting up Code Connect or variable code syntax |
-| [naming-conventions.md](references/naming-conventions.md) | Any | Optional | Naming anything — variables, pages, variants, styles |
-| [error-recovery.md](references/error-recovery.md) | Any | **Required on error** | Script fails, multi-step workflow recovery, cleanup of abandoned workflow state |
+Create semantic tokens that reference primitives and support theming:
 
----
+```
+Step 3.1: Create semantic collection with modes
+  figma_create_variable_collection("Semantic", ["Light", "Dark"])
+  → get semanticCollectionId
 
-## 11. Scripts
+Step 3.2: Batch create semantic color tokens
+  figma_batch_create_variables(semanticCollectionId, [
+    {
+      name: "color/background/primary",
+      type: "COLOR",
+      values: {
+        Light: { variableAlias: "color/blue/600" },  ← reference primitive
+        Dark: { variableAlias: "color/blue/400" }
+      }
+    },
+    {
+      name: "color/background/surface",
+      type: "COLOR",
+      values: {
+        Light: "#FFFFFF",
+        Dark: "#1A1A2E"
+      }
+    },
+    {
+      name: "color/text/primary",
+      type: "COLOR",
+      values: {
+        Light: { variableAlias: "color/gray/900" },
+        Dark: { variableAlias: "color/gray/100" }
+      }
+    },
+    {
+      name: "color/border/default",
+      type: "COLOR",
+      values: {
+        Light: { variableAlias: "color/gray/200" },
+        Dark: { variableAlias: "color/gray/700" }
+      }
+    }
+  ])
 
-Reusable Plugin API helper functions. Embed in `use_figma` calls:
+Step 3.3: Batch create semantic spacing tokens
+  figma_batch_create_variables(semanticCollectionId, [
+    { name: "spacing/component/padding-sm", type: "FLOAT", values: { Light: 8, Dark: 8 } },
+    { name: "spacing/component/padding-md", type: "FLOAT", values: { Light: 16, Dark: 16 } },
+    { name: "spacing/component/padding-lg", type: "FLOAT", values: { Light: 24, Dark: 24 } },
+    { name: "spacing/layout/section", type: "FLOAT", values: { Light: 64, Dark: 64 } }
+  ])
+```
 
-| Script | Purpose |
-|--------|---------|
-| [inspectFileStructure.js](scripts/inspectFileStructure.js) | Discover all pages, components, variables, styles; returns full inventory |
-| [createVariableCollection.js](scripts/createVariableCollection.js) | Create a named collection with modes; returns `{collectionId, modeIds}` |
-| [createSemanticTokens.js](scripts/createSemanticTokens.js) | Create aliased semantic variables from a token map |
-| [createComponentWithVariants.js](scripts/createComponentWithVariants.js) | Build a component set from a variant matrix; handles grid layout |
-| [bindVariablesToComponent.js](scripts/bindVariablesToComponent.js) | Bind design tokens to all component visual properties |
-| [createDocumentationPage.js](scripts/createDocumentationPage.js) | Create a page with title + description + section structure |
-| [validateCreation.js](scripts/validateCreation.js) | Verify created nodes match expected counts, names, structure |
-| [cleanupOrphans.js](scripts/cleanupOrphans.js) | Remove orphaned nodes by name convention or state ledger IDs |
-| [rehydrateState.js](scripts/rehydrateState.js) | Scan file for all pages, components, variables by name; returns full `{key → nodeId}` map for state reconstruction |
+## Phase 4: Component Building
+
+Build components using the token system:
+
+### Button Component Pattern
+```
+Step 4.1: Create component frame
+  figma_create_frame("Button/Primary/Default", 120, 40)
+  → get buttonFrameId
+
+Step 4.2: Add label text
+  figma_create_text("Label", buttonFrameId, 0, 0, 14)
+  → get labelId
+
+Step 4.3: Configure layout
+  figma_update_node(buttonFrameId, {
+    layoutMode: "HORIZONTAL",
+    primaryAxisAlignItems: "CENTER",
+    counterAxisAlignItems: "CENTER",
+    paddingTop: 10,
+    paddingBottom: 10,
+    paddingLeft: 20,
+    paddingRight: 20,
+    cornerRadius: 8
+  })
+
+Step 4.4: Bind tokens
+  figma_bind_variable(buttonFrameId, bgColorTokenId, "fills")
+  figma_bind_variable(labelId, textColorTokenId, "fills")
+  figma_bind_variable(buttonFrameId, paddingTokenId, "paddingTop")
+  figma_bind_variable(buttonFrameId, paddingTokenId, "paddingBottom")
+
+Step 4.5: Create variants (Secondary, Destructive, Ghost)
+  → Repeat Steps 4.1-4.4 with different token bindings
+```
+
+### Input Component Pattern
+```
+Step 4.1: figma_create_frame("Input/Default", 280, 40)
+Step 4.2: figma_create_text("Placeholder", inputId, 12, 0, 14)
+Step 4.3: figma_update_node(inputId, {
+  layoutMode: "HORIZONTAL",
+  counterAxisAlignItems: "CENTER",
+  paddingLeft: 12,
+  paddingRight: 12,
+  cornerRadius: 6,
+  strokeWeight: 1
+})
+Step 4.4: figma_bind_variable(inputId, borderColorTokenId, "strokes")
+Step 4.5: figma_bind_variable(inputId, bgTokenId, "fills")
+```
+
+### Card Component Pattern
+```
+Step 4.1: figma_create_frame("Card/Default", 320, 200)
+Step 4.2: figma_create_rectangle(320, 160, cardId, 0, 0)  ← image placeholder
+Step 4.3: figma_create_text("Card Title", cardId, 16, 168, 16)
+Step 4.4: figma_create_text("Card description text", cardId, 16, 192, 14)
+Step 4.5: figma_update_node(cardId, {
+  layoutMode: "VERTICAL",
+  itemSpacing: 8,
+  paddingBottom: 16,
+  cornerRadius: 12
+})
+Step 4.6: figma_bind_variable(cardId, surfaceColorId, "fills")
+Step 4.7: figma_bind_variable(cardId, borderColorId, "strokes")
+```
+
+## Phase 5: Variant Organization
+
+After creating all component variants, organize them into component sets:
+
+```
+Step 5.1: Group variants
+  figma_group_nodes([buttonDefaultId, buttonHoverId, buttonDisabledId])
+
+Step 5.2: Arrange component set grid
+  figma_arrange_component_set(componentSetId, columns=3, padding=40)
+```
+
+This auto-arranges all variants in a clean grid layout.
+
+## Phase 6: Component Documentation
+
+Generate documentation for each component:
+
+```
+figma_generate_component_doc(componentId, fileKey, includeCode=true)
+```
+
+This generates:
+- Component anatomy diagram description
+- Variant table (all properties and values)
+- Design token references
+- Typography specifications
+- Accessibility notes
+- Usage guidelines
+
+Save the generated documentation to `docs/components/[ComponentName].md`.
+
+## Phase 7: Verification
+
+Take screenshots of completed components:
+
+```
+get_screenshot(componentSetId)   → verify all variants render correctly
+get_screenshot(tokenPageId)      → verify token documentation page
+```
+
+Review for:
+- Token bindings applied correctly (colors match theme)
+- Variant grid organized cleanly
+- Component properties set correctly
+- Typography renders with correct fonts
+
+## Token Naming Conventions
+
+### Color Tokens
+```
+Primitives:  color/{hue}/{shade}     → color/blue/500, color/gray/100
+Semantic:    color/{role}/{variant}  → color/background/primary, color/text/secondary
+Component:   {component}/{property} → button/background, input/border
+```
+
+### Spacing Tokens
+```
+Primitives:  spacing/{scale}         → spacing/1 (4px), spacing/4 (16px)
+Semantic:    spacing/{context}/{size} → spacing/component/padding-md
+```
+
+### Typography Tokens
+```
+font-size/{scale}    → font-size/sm, font-size/base, font-size/xl
+font-weight/{name}   → font-weight/regular, font-weight/medium, font-weight/bold
+line-height/{scale}  → line-height/tight, line-height/normal, line-height/relaxed
+```
+
+## Batch Size Guidelines
+
+| Token Count | Strategy |
+|-------------|----------|
+| 1-2 tokens | `figma_create_variable` (single) |
+| 3-50 tokens | `figma_batch_create_variables` (one call) |
+| 51-100 tokens | Two `figma_batch_create_variables` calls (50 each) |
+| 100+ tokens | Multiple batches of 50, organized by category |
+| Full token system | `figma_setup_design_tokens` (all collections at once) |
+
+## Error Handling
+
+| Issue | Fix |
+|-------|-----|
+| Duplicate variable names | Use `figma_get_local_variables()` to check existing names before creating |
+| Variable alias not resolving | Ensure referenced variable exists in the same or linked collection |
+| Component set not forming | Ensure all variants have matching property names |
+| Batch limit exceeded | Split into multiple calls of ≤50 variables each |
+| Token binding fails | Use `figma_get_variable_collections()` to verify collection and variable IDs |
+
+## Completion Checklist
+
+Before marking the task complete:
+- [ ] Primitive token collection created with all base values
+- [ ] Semantic token collection created with light/dark mode values
+- [ ] All semantic tokens reference primitives (not hardcoded values)
+- [ ] Components built using semantic tokens (not hardcoded colors)
+- [ ] Component variants organized in component sets
+- [ ] Component sets arranged with `figma_arrange_component_set`
+- [ ] Documentation generated for key components
+- [ ] Screenshots taken and verified
+- [ ] State ledger shows all phases completed

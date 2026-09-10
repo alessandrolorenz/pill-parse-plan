@@ -1,0 +1,29 @@
+{
+  "$schema": "https://app.aicockpit.ai/config.json",
+  "mcp": {
+    "context7": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "environment": {
+        "DEFAULT_MINIMUM_TOKENS": "{{DEFAULT_MINIMUM_TOKENS}}"
+      }
+    },
+    "figma-console": {
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "figma-console-mcp@latest"
+      ],
+      "environment": {
+        "FIGMA_ACCESS_TOKEN": "{{FIGMA_ACCESS_TOKEN}}",
+        "ENABLE_MCP_APPS": "true"
+      },
+      "enabled": true
+    }
+  }
+}
