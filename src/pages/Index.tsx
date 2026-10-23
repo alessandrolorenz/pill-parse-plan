@@ -210,12 +210,10 @@ const Index = () => {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded-xl">
-                <Pill className="h-6 w-6 text-primary" />
-              </div>
+              <img src="/pill-icon.svg" alt="Pills Planner" className="h-10 w-10 rounded-xl shadow-sm" />
               <div>
                 <h1 className="text-xl font-bold gradient-primary bg-clip-text text-transparent">
-                  Tratamento por Receita
+                  Pills Planner
                 </h1>
                 <p className="text-sm text-muted-foreground">
                   Análise inteligente de prescrições médicas

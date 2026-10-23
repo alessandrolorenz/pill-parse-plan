@@ -10,7 +10,12 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "mobile:start": "pnpm --filter @pill-parse-plan/mobile start",
+    "mobile:android": "pnpm --filter @pill-parse-plan/mobile android",
+    "mobile:ios": "pnpm --filter @pill-parse-plan/mobile ios",
+    "mobile:build:android": "pnpm --filter @pill-parse-plan/mobile build:android"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -77,11 +82,11 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
-    "lovable-tagger": "^1.1.9",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
-    "vite": "^5.4.19"
+    "vite": "^5.4.19",
+    "vitest": "^2.1.9"
   }
 }

@@ -177,12 +177,11 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     )
-  } catch (error: unknown) {
-    const err = error instanceof Error ? error : new Error(String(error))
+  } catch (error) {
     console.error('Erro completo ao processar receita:', {
-      error: err.message,
-      stack: err.stack,
-      name: err.name
+      error: error.message,
+      stack: error.stack,
+      name: error.name
     })
 
     return new Response(

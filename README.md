@@ -1,5 +1,13 @@
 # Welcome to your Lovable project
 
+## 📐 Arquitetura do Sistema e Diagramas
+
+A documentação detalhada da arquitetura do projeto — incluindo diagramas C4 (Contexto, Contêineres e Componentes), fluxos sequenciais ponta a ponta, modelo de entidades (ERD), arquitetura de tokens do Figma e governança de qualidade com IA — está disponível em:
+
+👉 **[Consulte a Arquitetura Completa (ARCHITECTURE.md)](./ARCHITECTURE.md)**
+
+---
+
 ## Project info
 
 **URL**: https://lovable.dev/projects/7d524653-ac03-442c-ad32-403b69e82e98

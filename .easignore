@@ -1,0 +1,15 @@
+**/node_modules
+**/.expo
+**/.git
+**/.turbo
+**/dist
+**/build
+tests/visual/**
+.harness/**
+*.png
+*.jpg
+*.jpeg
+*.mp4
+*.tar.gz
+*.zip
+!apps/mobile/assets/**

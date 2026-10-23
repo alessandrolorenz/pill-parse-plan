@@ -1,4 +1,9 @@
-# Logs
+# Expo / Mobile / Monorepo
+.expo/
+.turbo/
+.aicockpit/
+supabase/.temp/
+
 logs
 *.log
 npm-debug.log*

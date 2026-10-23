@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="fav-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+    <linearGradient id="fav-pill-blue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background container -->
+  <rect width="64" height="64" rx="16" fill="url(#fav-bg)" />
+
+  <!-- Rotated pill -->
+  <g transform="translate(32, 32) rotate(-45)">
+    <!-- Blue capsule half -->
+    <path d="M -18,-9 L -1, -9 L -1, 9 L -18, 9 A 9 9 0 0 1 -18,-9 Z" fill="url(#fav-pill-blue)" />
+    <!-- White capsule half -->
+    <path d="M 1,-9 L 18, -9 A 9 9 0 0 1 18, 9 L 1, 9 Z" fill="#ffffff" />
+    <!-- Center cut -->
+    <line x1="0" y1="-9" x2="0" y2="9" stroke="#0f172a" stroke-width="1.5" opacity="0.4" />
+    <!-- Mini cross -->
+    <rect x="-13" y="-2" width="6" height="4" rx="1" fill="#ffffff" />
+    <rect x="-12" y="-3" width="4" height="6" rx="1" fill="#ffffff" />
+  </g>
+</svg>

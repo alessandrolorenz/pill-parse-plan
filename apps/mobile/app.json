@@ -1,0 +1,68 @@
+{
+  "expo": {
+    "name": "Pills Planner",
+    "slug": "pill-parse-plan",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "pillparse",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pillparse.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Precisamos de acesso à câmera para fotografar suas receitas médicas.",
+        "NSPhotoLibraryUsageDescription": "Precisamos de acesso à galeria para selecionar imagens de receitas médicas.",
+        "NSCalendarsUsageDescription": "Precisamos de acesso ao calendário para salvar os lembretes de medicamentos na sua agenda.",
+        "NSCalendarsFullAccessUsageDescription": "Precisamos de acesso ao calendário para salvar os lembretes de medicamentos na sua agenda."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.pillparse.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "O app precisa de acesso às suas fotos para carregar receitas médicas.",
+          "cameraPermission": "O app precisa de acesso à câmera para fotografar receitas médicas."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#106BC6"
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "O app precisa de acesso ao calendário para salvar seus horários de medicamentos."
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "57d13da4-7501-46f5-91af-f4500ac57d16"
+      }
+    },
+    "owner": "alessandrolorenz"
+  }
+}

@@ -222,6 +222,9 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted/50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
+          <div className="flex justify-center mb-2">
+            <img src="/pill-icon.svg" alt="Pills Planner" className="w-14 h-14 rounded-2xl shadow-md" />
+          </div>
           <CardTitle className="text-2xl">Pills Planner</CardTitle>
           <CardDescription>
             Gerencie seus tratamentos de forma inteligente

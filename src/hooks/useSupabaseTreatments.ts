@@ -164,12 +164,26 @@ export function useSupabaseTreatments() {
     }
   };
 
-  const getPrescriptionImageUrl = (imagePath: string): string => {
-    const { data } = supabase.storage
-      .from('prescriptions')
-      .getPublicUrl(imagePath);
-    
-    return data.publicUrl;
+  const getPrescriptionImageUrl = async (imagePath: string): Promise<string> => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('prescriptions')
+        .createSignedUrl(imagePath, 3600);
+
+      if (error || !data?.signedUrl) {
+        const { data: publicData } = supabase.storage
+          .from('prescriptions')
+          .getPublicUrl(imagePath);
+        return publicData.publicUrl;
+      }
+
+      return data.signedUrl;
+    } catch {
+      const { data } = supabase.storage
+        .from('prescriptions')
+        .getPublicUrl(imagePath);
+      return data.publicUrl;
+    }
   };
 
   return {
