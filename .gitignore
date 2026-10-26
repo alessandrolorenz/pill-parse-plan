@@ -1,7 +1,7 @@
 # Expo / Mobile / Monorepo
 .expo/
 .turbo/
-.aicockpit/
+# .aicockpit/
 supabase/.temp/
 
 logs

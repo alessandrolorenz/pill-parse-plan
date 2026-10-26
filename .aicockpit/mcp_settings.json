@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "storybook": {
+      "type": "http",
+      "url": "http://localhost:6006/mcp",
+      "description": "Storybook MCP server for component documentation and testing"
+    }
+  }
+}
