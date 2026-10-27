@@ -90,6 +90,9 @@ export function useManagedTreatments() {
     // Pass through other methods based on plan
     getTreatmentEvents: useCloud ? supabaseTreatments.getTreatmentEvents : undefined,
     updateEventStatus: useCloud ? supabaseTreatments.updateEventStatus : undefined,
+    setTreatmentStatus: useCloud ? supabaseTreatments.setTreatmentStatus : undefined,
+    deleteTreatment: useCloud ? supabaseTreatments.deleteTreatment : undefined,
+    loadTreatments: useCloud ? supabaseTreatments.loadTreatments : undefined,
     uploadPrescriptionImage: useCloud ? supabaseTreatments.uploadPrescriptionImage : undefined,
     getPrescriptionImageUrl: useCloud ? supabaseTreatments.getPrescriptionImageUrl : undefined,
     updateTreatmentEvents: !useCloud ? localTreatments.updateTreatmentEvents : undefined,

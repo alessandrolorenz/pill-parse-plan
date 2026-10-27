@@ -1,4 +1,6 @@
-# Welcome to your Lovable project
+# Pills Planner (DoseCerta)
+
+App que lê fotos de receitas médicas com IA (OpenAI Vision), gera um plano de tratamento revisável e agenda as doses na Web e no celular (iOS / Android).
 
 ## 📐 Arquitetura do Sistema e Diagramas
 
@@ -8,130 +10,75 @@ A documentação detalhada da arquitetura do projeto — incluindo diagramas C4 
 
 ---
 
-## Project info
+## Estrutura do repositório
 
-**URL**: https://lovable.dev/projects/7d524653-ac03-442c-ad32-403b69e82e98
+Monorepo com pnpm workspaces:
 
-## ⚠️ Configuração Obrigatória
+| Pasta | Conteúdo |
+|---|---|
+| raiz (`src/`) | App Web: React 18 + Vite + Tailwind + shadcn/ui |
+| `apps/mobile` | App Mobile: Expo SDK 56 + React Native 0.85 + NativeWind |
+| `packages/core` | Tipos de domínio e o motor de agendamento (`expandPlanToEvents`), compartilhados entre Web e Mobile |
+| `supabase/` | Migrations e Edge Functions (`analyze-prescription`, `openai-status`) |
+| `server.js` + `api/` | Servidor Express legado (proxy OpenAI, Web Push e cron de notificações) |
 
-Este projeto requer uma chave da OpenAI API para funcionar. Siga estes passos:
+## ⚠️ Configuração
 
-### 1. Configurar variáveis de ambiente
+### 1. Chave da OpenAI (Supabase Edge Function)
+
+A análise de receitas roda na Edge Function `analyze-prescription`. A chave da OpenAI fica como secret do Supabase e nunca vai para o cliente:
 
 ```sh
-# Copie o arquivo de exemplo
+supabase secrets set OPENAI_API_KEY=sk-sua-chave-aqui
+```
+
+Obtenha a chave em [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+
+### 2. Variáveis de ambiente locais
+
+```sh
 cp .env.example .env
-
-# Edite o arquivo .env e adicione sua chave da OpenAI
-# OPENAI_API_KEY=sk-sua-chave-aqui
 ```
 
-### 2. Obter chave da OpenAI
+- Web: `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`
+- Mobile: `EXPO_PUBLIC_SUPABASE_URL` e `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+- Servidor Express (opcional, só para Web Push): `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `PORT` (padrão 3001)
 
-1. Acesse [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
-2. Faça login ou crie uma conta
-3. Clique em "Create new secret key"
-4. Copie a chave gerada
-5. Cole no arquivo `.env`
+Sem as variáveis, os clientes Web e Mobile usam como fallback o projeto Supabase fixo no código (`ekqygszihajwzeztdbqq`). Atenção: `supabase/config.toml` aponta para outro projeto (`qryiaiuwcqaoyjlbywfn`).
 
-### 3. Executar o projeto
+### 3. Executar
 
 ```sh
-# Instalar dependências
-npm install
+pnpm install
 
-# Executar servidor API + frontend (recomendado)
-npm run dev:full
-
-# OU executar separadamente:
-# Terminal 1: npm run server
-# Terminal 2: npm run dev
+pnpm dev            # App Web em http://localhost:8080
+pnpm mobile:start   # App Mobile (Expo)
 ```
 
-### 4. Verificar configuração
+O servidor Express (`pnpm server`, ou `pnpm dev:full` para Web + servidor) só é necessário para Web Push. As dependências dele (`express`, `cors`, `dotenv`, `web-push`) **não estão declaradas no `package.json`** e precisam ser instaladas antes: `pnpm add express cors dotenv web-push`.
 
-- Acesse http://localhost:8080
-- Clique no ícone de configurações (⚙️) no canto superior direito
-- Verifique se aparece "✓ Configurada" para OpenAI API
-
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/7d524653-ac03-442c-ad32-403b69e82e98) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+### 4. Testes e qualidade
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Configure environment variables
-cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
-
-# Step 5: Start both API server and frontend
-npm run dev:full
+pnpm test                             # Vitest (src/ e packages/core)
+pnpm lint
+pnpm exec tsc --noEmit -p tsconfig.app.json
+pnpm build
 ```
 
-**Edit a file directly in GitHub**
+## Builds Mobile
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```sh
+pnpm mobile:build:android   # EAS build (perfil preview)
+```
 
-**Use GitHub Codespaces**
+## Lovable
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Projeto original: https://lovable.dev/projects/7d524653-ac03-442c-ad32-403b69e82e98
 
-## What technologies are used for this project?
+Alterações enviadas a este repositório também aparecem no Lovable. Para publicar a versão Web pelo Lovable, use Share -> Publish. Para conectar um domínio próprio, use Project > Settings > Domains ([guia](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)).
 
-This project is built with:
+## Segurança
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-- Express.js (API server)
-- OpenAI API (image analysis)
-
-## Security Features
-
-- ✅ OpenAI API key nunca exposta ao cliente
-- ✅ Todas as chamadas à OpenAI via proxy server-side
-- ✅ Chaves armazenadas apenas em variáveis de ambiente
-- ✅ Validação de entrada no servidor
-- ✅ Tratamento de erros robusto
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/7d524653-ac03-442c-ad32-403b69e82e98) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+- A chave da OpenAI nunca é exposta ao cliente: as chamadas passam pela Edge Function (ou pelo servidor Express legado).
+- Dados isolados por usuário com RLS no Postgres; imagens de receitas em bucket privado (`prescriptions`).

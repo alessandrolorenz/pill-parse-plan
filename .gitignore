@@ -32,3 +32,7 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Expo prebuild (gerado por expo run:android / run:ios)
+apps/mobile/android/
+apps/mobile/ios/

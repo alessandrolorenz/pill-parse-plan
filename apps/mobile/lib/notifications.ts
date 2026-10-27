@@ -160,6 +160,28 @@ export async function scheduleSlidingWindowNotifications(
 }
 
 /**
+ * Cancela apenas as notificações de um tratamento (ao arquivar ou excluir), preservando as dos demais
+ */
+export async function cancelTreatmentNotifications(treatmentId: string): Promise<number> {
+  const Notifications = getNotifications();
+  if (!Notifications) return 0;
+
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const toCancel = scheduled.filter(
+      (n: any) => n.content?.data?.treatmentId === treatmentId
+    );
+    for (const n of toCancel) {
+      await Notifications.cancelScheduledNotificationAsync(n.identifier);
+    }
+    return toCancel.length;
+  } catch (err) {
+    console.warn('Erro ao cancelar notificações do tratamento:', err);
+    return 0;
+  }
+}
+
+/**
  * Listener para respostas de ações na notificação (Tomei / Adiar)
  */
 export function registerNotificationResponseListener() {

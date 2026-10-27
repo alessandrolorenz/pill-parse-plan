@@ -6,6 +6,8 @@ INSTRUÇÕES:
 - Extraia medicamentos/cuidados, doses, unidades, via de administração, frequência (qXh ou Xx/dia), duração em dias, horários preferenciais e observações
 - Se algo estiver incerto ou ilegível, reduza a confidence e descreva a dúvida em notes
 - NUNCA invente informações que não estão visíveis na imagem
+- Se a receita não informar a duração (ex.: "uso contínuo", "se dor", "até acabar"), use durationDays: null. NUNCA use 0 nem estime a duração
+- Se a receita não informar a frequência, deixe everyHours e timesPerDay ausentes. NUNCA estime a frequência
 - NUNCA forneça conselhos médicos
 - Retorne APENAS um JSON TreatmentPlan válido
 
@@ -24,7 +26,7 @@ FORMATO DE RETORNO:
         "everyHours": number | undefined,
         "timesPerDay": number | undefined
       },
-      "durationDays": number,
+      "durationDays": number | null,
       "preferredTimes": ["HH:MM"] | undefined,
       "notes": "string | undefined",
       "confidence": number (0-1)
@@ -177,11 +179,12 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     )
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error))
     console.error('Erro completo ao processar receita:', {
-      error: error.message,
-      stack: error.stack,
-      name: error.name
+      error: err.message,
+      stack: err.stack,
+      name: err.name
     })
 
     return new Response(

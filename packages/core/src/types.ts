@@ -8,7 +8,8 @@ export type TreatmentItem = {
     everyHours?: number;   // ex: 8  (q8h)
     timesPerDay?: number;  // ex: 3  (3x/dia)
   };
-  durationDays: number;    // ex: 7
+  durationDays: number | null; // ex: 7. null = a receita não informa; o usuário deve preencher no review
+  continuous?: boolean;    // uso contínuo: agenda gerada para CONTINUOUS_HORIZON_DAYS
   preferredTimes?: string[]; // ["08:00","16:00","00:00"] (opcional)
   notes?: string;
   confidence?: number;     // 0..1

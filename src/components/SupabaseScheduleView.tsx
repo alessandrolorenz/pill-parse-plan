@@ -1,10 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Download, Bell, CheckCircle, Clock, ArrowLeft } from 'lucide-react';
+import { Calendar, Download, Bell, CheckCircle, Clock, ArrowLeft, Archive, ArchiveRestore, Trash2, PartyPopper } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useSupabaseTreatments, SupabaseEvent } from '@/hooks/useSupabaseTreatments';
 import { eventsToICS } from '@/lib/ics';
@@ -15,17 +26,23 @@ import { ptBR } from 'date-fns/locale';
 interface SupabaseScheduleViewProps {
   treatmentId: string;
   onBack: () => void;
+  onTreatmentChanged: (change: 'archived' | 'reactivated' | 'deleted') => void;
+  // Returns false (and shows the plan limit modal) when the user can't have another active treatment
+  canReactivate: () => boolean;
 }
 
-export function SupabaseScheduleView({ treatmentId, onBack }: SupabaseScheduleViewProps) {
+export function SupabaseScheduleView({ treatmentId, onBack, onTreatmentChanged, canReactivate }: SupabaseScheduleViewProps) {
   const [events, setEvents] = useState<SupabaseEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [isUpdatingTreatment, setIsUpdatingTreatment] = useState(false);
   const { toast } = useToast();
   const { 
     treatments,
     getTreatmentEvents,
-    updateEventStatus
+    updateEventStatus,
+    setTreatmentStatus,
+    deleteTreatment
   } = useSupabaseTreatments();
 
   const treatment = treatments.find(t => t.id === treatmentId);
@@ -51,23 +68,65 @@ export function SupabaseScheduleView({ treatmentId, onBack }: SupabaseScheduleVi
     }
   };
 
+  // Atualização otimista: não recarrega a lista, para não perder a posição do scroll
+  const setEventDone = (eventId: string, done: boolean) => {
+    setEvents(prev => prev.map(event => (event.id === eventId ? { ...event, done } : event)));
+  };
+
   const handleEventToggle = async (eventId: string, completed: boolean) => {
+    setEventDone(eventId, completed);
     try {
       await updateEventStatus(eventId, completed);
-      await loadEvents(); // Recarregar eventos
-      
-      toast({
-        title: completed ? 'Evento marcado como concluído' : 'Evento desmarcado',
-        description: 'Status atualizado com sucesso.',
-        variant: 'default'
-      });
     } catch (error) {
       console.error('Error updating event:', error);
+      setEventDone(eventId, !completed);
       toast({
         title: 'Erro',
         description: 'Não foi possível atualizar o evento.',
         variant: 'destructive'
       });
+    }
+  };
+
+  const handleArchive = async () => {
+    setIsUpdatingTreatment(true);
+    try {
+      await setTreatmentStatus(treatmentId, 'archived');
+      toast({ title: 'Tratamento arquivado', description: 'Ele está na aba Arquivados.' });
+      onTreatmentChanged('archived');
+    } catch (error) {
+      console.error('Error archiving treatment:', error);
+      toast({ title: 'Erro', description: 'Não foi possível arquivar o tratamento.', variant: 'destructive' });
+    } finally {
+      setIsUpdatingTreatment(false);
+    }
+  };
+
+  const handleReactivate = async () => {
+    if (!canReactivate()) return;
+    setIsUpdatingTreatment(true);
+    try {
+      await setTreatmentStatus(treatmentId, 'active');
+      toast({ title: 'Tratamento reativado' });
+      onTreatmentChanged('reactivated');
+    } catch (error) {
+      console.error('Error reactivating treatment:', error);
+      toast({ title: 'Erro', description: 'Não foi possível reativar o tratamento.', variant: 'destructive' });
+    } finally {
+      setIsUpdatingTreatment(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setIsUpdatingTreatment(true);
+    try {
+      await deleteTreatment(treatmentId);
+      toast({ title: 'Tratamento excluído' });
+      onTreatmentChanged('deleted');
+    } catch (error) {
+      console.error('Error deleting treatment:', error);
+      toast({ title: 'Erro', description: 'Não foi possível excluir o tratamento.', variant: 'destructive' });
+      setIsUpdatingTreatment(false);
     }
   };
 
@@ -161,6 +220,8 @@ export function SupabaseScheduleView({ treatmentId, onBack }: SupabaseScheduleVi
   const completedEvents = events.filter(e => e.done).length;
   const totalEvents = events.length;
   const progressPercentage = totalEvents > 0 ? (completedEvents / totalEvents) * 100 : 0;
+  const isActive = treatment.status === 'active';
+  const allDosesDone = totalEvents > 0 && completedEvents === totalEvents;
 
   // Agrupar eventos por data
   const eventsByDate = events.reduce((acc, event) => {
@@ -208,7 +269,7 @@ export function SupabaseScheduleView({ treatmentId, onBack }: SupabaseScheduleVi
               <Progress value={progressPercentage} className="h-2" />
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -227,10 +288,64 @@ export function SupabaseScheduleView({ treatmentId, onBack }: SupabaseScheduleVi
                 <Bell className="h-4 w-4 mr-2" />
                 {notificationsEnabled ? 'Notificações Ativas' : 'Ativar Lembretes'}
               </Button>
+              {isActive ? (
+                <Button variant="outline" size="sm" onClick={handleArchive} disabled={isUpdatingTreatment}>
+                  <Archive className="h-4 w-4 mr-2" />
+                  Arquivar
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={handleReactivate} disabled={isUpdatingTreatment}>
+                  <ArchiveRestore className="h-4 w-4 mr-2" />
+                  Reativar
+                </Button>
+              )}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="text-destructive" disabled={isUpdatingTreatment}>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Excluir
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Excluir tratamento?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      "{treatment.title}" e todas as suas doses serão apagados permanentemente. Esta ação não pode ser desfeita.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleDelete}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Excluir
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {isActive && allDosesDone && (
+        <Card className="border-primary">
+          <CardContent className="pt-6 flex flex-col sm:flex-row sm:items-center gap-4">
+            <PartyPopper className="h-6 w-6 text-primary flex-shrink-0" />
+            <div className="flex-1">
+              <p className="font-semibold">Todas as doses foram concluídas 🎉</p>
+              <p className="text-sm text-muted-foreground">
+                Arquive o tratamento para liberar espaço na lista de ativos. Ele continua disponível em Arquivados.
+              </p>
+            </div>
+            <Button onClick={handleArchive} disabled={isUpdatingTreatment}>
+              <Archive className="h-4 w-4 mr-2" />
+              Arquivar tratamento
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Lista de eventos por data */}
       <div className="space-y-4">

@@ -25,6 +25,14 @@ export const planStore = {
     };
     listeners.forEach((l) => l());
   },
+  // Edições feitas no review: mantém imagem e data de início
+  updateDraftPlan: (plan: TreatmentPlan) => {
+    draftState = {
+      ...draftState,
+      plan,
+    };
+    listeners.forEach((l) => l());
+  },
   setStartDateTime: (date: Date) => {
     draftState = {
       ...draftState,

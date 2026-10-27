@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, ActivityIndicator, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../../components/ui/button';
@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../..
 import { Tabs, TabsList, TabsTrigger } from '../../components/ui/Tabs';
 import { TreatmentCard } from '../../components/ui/TreatmentCard';
 import { supabase } from '../../lib/supabase';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 
 interface TreatmentWithProgress {
   id: string;
@@ -24,57 +24,61 @@ export default function HomeScreen() {
   const [treatments, setTreatments] = useState<TreatmentWithProgress[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function loadTreatments() {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          router.replace('/(auth)/sign-in');
-          return;
-        }
-
-        const { data: treatmentsData, error } = await supabase
-          .from('treatments')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (!error && treatmentsData) {
-          // Carregar eventos para cada tratamento para calcular progresso
-          const treatmentsWithProgress: TreatmentWithProgress[] = await Promise.all(
-            treatmentsData.map(async (t) => {
-              const { data: events } = await supabase
-                .from('events')
-                .select('done, date, time')
-                .eq('treatment_id', t.id);
-
-              const total = events?.length || 0;
-              const done = events?.filter((e) => e.done).length || 0;
-              const progressPercent = total > 0 ? (done / total) * 100 : 0;
-
-              const next = events?.find((e) => !e.done);
-              const nextDose = next ? `${next.date.split('-').reverse().slice(0, 2).join('/')} às ${next.time.substring(0, 5)}` : null;
-
-              return {
-                ...t,
-                progressPercent,
-                nextDose,
-              };
-            })
-          );
-
-          setTreatments(treatmentsWithProgress);
-        }
-      } catch (err) {
-        console.error('Erro ao carregar tratamentos:', err);
+  // Recarrega sempre que a tela volta ao foco (ex.: depois de marcar doses no detalhe).
+  // O spinner só aparece na primeira carga; as seguintes são silenciosas.
+  const loadTreatments = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
         router.replace('/(auth)/sign-in');
-      } finally {
-        setLoading(false);
+        return;
       }
-    }
 
-    loadTreatments();
+      const { data: treatmentsData, error } = await supabase
+        .from('treatments')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (!error && treatmentsData) {
+        // Carregar eventos para cada tratamento para calcular progresso
+        const treatmentsWithProgress: TreatmentWithProgress[] = await Promise.all(
+          treatmentsData.map(async (t) => {
+            const { data: events } = await supabase
+              .from('events')
+              .select('done, date, time')
+              .eq('treatment_id', t.id);
+
+            const total = events?.length || 0;
+            const done = events?.filter((e) => e.done).length || 0;
+            const progressPercent = total > 0 ? (done / total) * 100 : 0;
+
+            const next = events?.find((e) => !e.done);
+            const nextDose = next ? `${next.date.split('-').reverse().slice(0, 2).join('/')} às ${next.time.substring(0, 5)}` : null;
+
+            return {
+              ...t,
+              progressPercent,
+              nextDose,
+            };
+          })
+        );
+
+        setTreatments(treatmentsWithProgress);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar tratamentos:', err);
+      router.replace('/(auth)/sign-in');
+    } finally {
+      setLoading(false);
+    }
   }, [router]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadTreatments();
+    }, [loadTreatments])
+  );
 
   const filteredTreatments = treatments.filter((t) => {
     if (activeTab === 'active') {

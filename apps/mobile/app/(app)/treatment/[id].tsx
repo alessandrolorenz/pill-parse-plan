@@ -8,7 +8,7 @@ import { Progress } from '../../../components/ui/Progress';
 import { Badge } from '../../../components/ui/badge';
 import { EventItem } from '../../../components/ui/EventItem';
 import { supabase } from '../../../lib/supabase';
-import { scheduleSlidingWindowNotifications } from '../../../lib/notifications';
+import { scheduleSlidingWindowNotifications, cancelTreatmentNotifications } from '../../../lib/notifications';
 import { syncEventsToNativeCalendar } from '../../../lib/calendar';
 import { format, isToday, isTomorrow, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -44,6 +44,7 @@ export default function TreatmentDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [totalEvents, setTotalEvents] = useState(0);
   const [doneEvents, setDoneEvents] = useState(0);
+  const [isUpdatingTreatment, setIsUpdatingTreatment] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -158,6 +159,58 @@ export default function TreatmentDetailScreen() {
     }
   };
 
+  const setStatus = async (status: 'active' | 'archived') => {
+    if (!treatment) return;
+    setIsUpdatingTreatment(true);
+    try {
+      const { error } = await supabase
+        .from('treatments')
+        .update({ status })
+        .eq('id', treatment.id);
+
+      if (error) throw error;
+
+      if (status === 'archived') {
+        await cancelTreatmentNotifications(treatment.id);
+        router.back();
+      } else {
+        setTreatment({ ...treatment, status });
+      }
+    } catch (err: any) {
+      Alert.alert('Erro', err.message || 'Não foi possível atualizar o tratamento.');
+    } finally {
+      setIsUpdatingTreatment(false);
+    }
+  };
+
+  const handleDelete = () => {
+    if (!treatment) return;
+    Alert.alert(
+      'Excluir tratamento?',
+      `"${treatment.title}" e todas as suas doses serão apagados permanentemente.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: async () => {
+            setIsUpdatingTreatment(true);
+            try {
+              // Eventos e lembretes são removidos pelo ON DELETE CASCADE
+              const { error } = await supabase.from('treatments').delete().eq('id', treatment.id);
+              if (error) throw error;
+              await cancelTreatmentNotifications(treatment.id);
+              router.back();
+            } catch (err: any) {
+              Alert.alert('Erro', err.message || 'Não foi possível excluir o tratamento.');
+              setIsUpdatingTreatment(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleSyncCalendar = async () => {
     if (!treatment || sections.length === 0) return;
     try {
@@ -196,6 +249,8 @@ export default function TreatmentDetailScreen() {
   };
 
   const progressPercent = totalEvents > 0 ? (doneEvents / totalEvents) * 100 : 0;
+  const isActive = treatment?.status === 'active' || !treatment?.status;
+  const allDosesDone = totalEvents > 0 && doneEvents === totalEvents;
 
   if (loading) {
     return (
@@ -213,8 +268,8 @@ export default function TreatmentDetailScreen() {
           <Card className="mb-4">
             <View className="flex-row items-center justify-between mb-1">
               <CardTitle className="text-xl flex-1 mr-2">{treatment.title}</CardTitle>
-              <Badge variant={treatment.status === 'active' ? 'default' : 'secondary'}>
-                {treatment.status === 'active' ? 'Ativo' : 'Concluído'}
+              <Badge variant={isActive ? 'default' : 'secondary'}>
+                {isActive ? 'Ativo' : 'Arquivado'}
               </Badge>
             </View>
 
@@ -250,6 +305,39 @@ export default function TreatmentDetailScreen() {
                 🔔 Reagendar Alarmes
               </Button>
             </View>
+
+            <View className="flex-row items-center justify-between mt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onPress={() => setStatus(isActive ? 'archived' : 'active')}
+                disabled={isUpdatingTreatment}
+                className="flex-1 mr-2"
+              >
+                {isActive ? '🗄️ Arquivar' : '↩️ Reativar'}
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onPress={handleDelete}
+                disabled={isUpdatingTreatment}
+                className="flex-1"
+              >
+                🗑️ Excluir
+              </Button>
+            </View>
+          </Card>
+        )}
+
+        {treatment && isActive && allDosesDone && (
+          <Card className="mb-4 border-primary">
+            <Text className="text-base font-bold text-foreground">Todas as doses foram concluídas 🎉</Text>
+            <Text className="text-xs text-muted-foreground mt-1 mb-3">
+              Arquive o tratamento para tirá-lo da lista de ativos. Ele continua disponível em Concluídos.
+            </Text>
+            <Button variant="default" onPress={() => setStatus('archived')} disabled={isUpdatingTreatment}>
+              Arquivar tratamento
+            </Button>
           </Card>
         )}
 
