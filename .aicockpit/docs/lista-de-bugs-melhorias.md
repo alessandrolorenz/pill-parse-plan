@@ -22,4 +22,4 @@ mobile:
 
 extra:
 - [x] horários das doses gravados em UTC (dose das 08:00 aparecia como 11:00)
-  - Resolvido para novos tratamentos com `toEventRow`. Dados antigos: `supabase/manual/20261026_events_utc_to_local.sql` (aplicar manualmente, após backup).
+  - Resolvido para novos tratamentos com `toEventRow`. Dados antigos: `supabase/manual/events_utc_to_local_1_preview.sql` e `_2_apply.sql` (rodar no SQL Editor depois que a correção estiver no ar).
