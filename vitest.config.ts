@@ -2,6 +2,9 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react-swc';
 import path from 'path';
 
+// Fuso fixo: datas de dose são horário local do usuário (ver toEventRow)
+process.env.TZ = 'America/Sao_Paulo';
+
 export default defineConfig({
   plugins: [react()],
   define: {

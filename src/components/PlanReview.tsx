@@ -5,10 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { format } from 'date-fns';
 import { TreatmentPlan, TreatmentItem } from '@/lib/types';
+import { getPlanSchedulingIssues, CONTINUOUS_HORIZON_DAYS, PlanSchedulingIssue } from '@/lib/scheduler';
+
+type FrequencyMode = 'everyHours' | 'timesPerDay';
 
 interface PlanReviewProps {
   plan: TreatmentPlan;
+  onPlanChange: (plan: TreatmentPlan) => void;
   onGenerateSchedule: (startDateTime: Date) => void;
   startDateTime: Date;
   onStartDateTimeChange: (dateTime: Date) => void;
@@ -16,17 +23,46 @@ interface PlanReviewProps {
 
 export const PlanReview: React.FC<PlanReviewProps> = ({
   plan,
+  onPlanChange,
   onGenerateSchedule,
   startDateTime,
   onStartDateTimeChange
 }) => {
   const [showJson, setShowJson] = useState(false);
+  const issues = getPlanSchedulingIssues(plan);
+  // Campos que vieram faltando continuam editáveis mesmo depois de preenchidos
+  const [initialIssues] = useState<PlanSchedulingIssue[]>(issues);
+  const [frequencyModes, setFrequencyModes] = useState<Record<number, FrequencyMode>>({});
+
+  const needsInput = (itemIndex: number, field: PlanSchedulingIssue['field']) =>
+    [...initialIssues, ...issues].some(i => i.itemIndex === itemIndex && i.field === field);
+  const hasIssue = (itemIndex: number, field: PlanSchedulingIssue['field']) =>
+    issues.some(i => i.itemIndex === itemIndex && i.field === field);
+
+  const updateItem = (itemIndex: number, changes: Partial<TreatmentItem>) => {
+    onPlanChange({
+      ...plan,
+      items: plan.items.map((item, i) => (i === itemIndex ? { ...item, ...changes } : item))
+    });
+  };
+
+  const parsePositiveInt = (value: string) => {
+    const n = parseInt(value, 10);
+    return Number.isNaN(n) ? null : n;
+  };
+
+  const getFrequencyMode = (itemIndex: number, item: TreatmentItem): FrequencyMode =>
+    frequencyModes[itemIndex] ?? (item.frequency?.everyHours ? 'everyHours' : 'timesPerDay');
+
+  const updateFrequency = (itemIndex: number, mode: FrequencyMode, value: number | null) => {
+    updateItem(itemIndex, { frequency: value ? { [mode]: value } : {} });
+  };
 
   const formatFrequency = (item: TreatmentItem) => {
-    if (item.frequency.everyHours) {
+    if (item.frequency?.everyHours) {
       return `A cada ${item.frequency.everyHours} horas`;
     }
-    if (item.frequency.timesPerDay) {
+    if (item.frequency?.timesPerDay) {
       return `${item.frequency.timesPerDay}x por dia`;
     }
     return 'Frequência não especificada';
@@ -117,7 +153,22 @@ export const PlanReview: React.FC<PlanReviewProps> = ({
                 
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-primary" />
-                  <span>{item.durationDays} dias</span>
+                  {item.continuous ? (
+                    <span>Uso contínuo</span>
+                  ) : (
+                    <>
+                      <Input
+                        type="number"
+                        min={1}
+                        inputMode="numeric"
+                        aria-label={`Duração de ${item.name} em dias`}
+                        value={item.durationDays ?? ''}
+                        onChange={(e) => updateItem(index, { durationDays: parsePositiveInt(e.target.value) })}
+                        className={`h-8 w-20 ${hasIssue(index, 'durationDays') ? 'border-destructive' : ''}`}
+                      />
+                      <span>dias</span>
+                    </>
+                  )}
                 </div>
                 
                 {item.route && (
@@ -126,6 +177,60 @@ export const PlanReview: React.FC<PlanReviewProps> = ({
                   </div>
                 )}
               </div>
+
+              {(needsInput(index, 'durationDays') || item.continuous) && (
+                <div className="mt-3 p-3 rounded-lg border border-warning bg-warning/10 space-y-2">
+                  {hasIssue(index, 'durationDays') && (
+                    <p className="text-sm font-medium text-warning flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      Duração não informada na receita. Informe o número de dias ou marque uso contínuo.
+                    </p>
+                  )}
+                  <label className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={!!item.continuous}
+                      onCheckedChange={(checked) => updateItem(index, { continuous: !!checked })}
+                    />
+                    Uso contínuo (agenda gerada para os próximos {CONTINUOUS_HORIZON_DAYS} dias)
+                  </label>
+                </div>
+              )}
+
+              {needsInput(index, 'frequency') && (
+                <div className="mt-3 p-3 rounded-lg border border-warning bg-warning/10 space-y-2">
+                  {hasIssue(index, 'frequency') && (
+                    <p className="text-sm font-medium text-warning flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      Frequência não informada na receita. Confira com seu médico e preencha.
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <select
+                      aria-label={`Tipo de frequência de ${item.name}`}
+                      value={getFrequencyMode(index, item)}
+                      onChange={(e) => {
+                        const mode = e.target.value as FrequencyMode;
+                        setFrequencyModes(prev => ({ ...prev, [index]: mode }));
+                        const current = item.frequency?.everyHours ?? item.frequency?.timesPerDay ?? null;
+                        updateFrequency(index, mode, current);
+                      }}
+                      className="h-8 px-2 border border-border rounded-md bg-background"
+                    >
+                      <option value="timesPerDay">Vezes ao dia</option>
+                      <option value="everyHours">A cada X horas</option>
+                    </select>
+                    <Input
+                      type="number"
+                      min={1}
+                      inputMode="numeric"
+                      aria-label={`Frequência de ${item.name}`}
+                      value={item.frequency?.[getFrequencyMode(index, item)] ?? ''}
+                      onChange={(e) => updateFrequency(index, getFrequencyMode(index, item), parsePositiveInt(e.target.value))}
+                      className={`h-8 w-20 ${hasIssue(index, 'frequency') ? 'border-destructive' : ''}`}
+                    />
+                  </div>
+                </div>
+              )}
 
               {item.preferredTimes && item.preferredTimes.length > 0 && (
                 <div className="mt-3 p-3 bg-muted rounded-lg">
@@ -162,7 +267,7 @@ export const PlanReview: React.FC<PlanReviewProps> = ({
               <label className="block text-sm font-medium mb-2">Data</label>
               <input
                 type="date"
-                value={startDateTime.toISOString().split('T')[0]}
+                value={format(startDateTime, 'yyyy-MM-dd')}
                 onChange={(e) => {
                   const newDate = new Date(startDateTime);
                   const [year, month, day] = e.target.value.split('-').map(Number);
@@ -216,15 +321,19 @@ export const PlanReview: React.FC<PlanReviewProps> = ({
       <Separator />
 
       {/* Botão de gerar agenda */}
-      <div className="text-center">
+      <div className="text-center space-y-2">
         <Button 
           size="lg" 
           variant="medical"
           onClick={() => onGenerateSchedule(startDateTime)}
+          disabled={issues.length > 0}
           className="w-full md:w-auto"
         >
           Gerar Agenda de Medicamentos
         </Button>
+        {issues.length > 0 && (
+          <p className="text-sm text-warning">Preencha os campos destacados para gerar a agenda.</p>
+        )}
       </div>
     </div>
   );

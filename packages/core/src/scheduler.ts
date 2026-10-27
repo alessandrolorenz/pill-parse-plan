@@ -1,5 +1,49 @@
 import { TreatmentPlan, TreatmentItem, CalendarEvent } from './types';
 
+// Horizonte da agenda para itens de uso contínuo
+export const CONTINUOUS_HORIZON_DAYS = 30;
+
+export type PlanSchedulingIssue = {
+  itemIndex: number;
+  field: 'durationDays' | 'frequency';
+  message: string;
+};
+
+function effectiveDurationDays(item: TreatmentItem): number {
+  return item.continuous ? CONTINUOUS_HORIZON_DAYS : item.durationDays ?? 0;
+}
+
+// Itens sem duração ou frequência válidas não geram doses; o usuário precisa preencher antes de agendar
+export function getPlanSchedulingIssues(plan: TreatmentPlan): PlanSchedulingIssue[] {
+  const issues: PlanSchedulingIssue[] = [];
+
+  plan.items.forEach((item, itemIndex) => {
+    const duration = item.durationDays;
+    const hasDuration = item.continuous || (Number.isInteger(duration) && (duration ?? 0) > 0);
+    if (!hasDuration) {
+      issues.push({ itemIndex, field: 'durationDays', message: 'Duração não informada na receita' });
+    }
+
+    const { everyHours, timesPerDay } = item.frequency ?? {};
+    const hasFrequency = (everyHours ?? 0) > 0 || (timesPerDay ?? 0) > 0;
+    if (!hasFrequency) {
+      issues.push({ itemIndex, field: 'frequency', message: 'Frequência não informada na receita' });
+    }
+  });
+
+  return issues;
+}
+
+// Linha da tabela events: data e hora locais (horário de parede do usuário), não UTC
+export function toEventRow(event: CalendarEvent): { date: string; time: string } {
+  const d = new Date(event.startISO);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  };
+}
+
 export function expandPlanToEvents(
   plan: TreatmentPlan, 
   startDateTime: Date
@@ -24,17 +68,19 @@ function generateEventsForItem(
   const events: CalendarEvent[] = [];
   const startDate = new Date(startDateTime);
 
-  if (item.frequency.everyHours) {
+  const durationDays = effectiveDurationDays(item);
+
+  if (item.frequency?.everyHours) {
     // Frequência por horas (ex: q8h)
     const intervalMs = item.frequency.everyHours * 60 * 60 * 1000;
-    const endDate = new Date(startDate.getTime() + (item.durationDays * 24 * 60 * 60 * 1000));
+    const endDate = new Date(startDate.getTime() + (durationDays * 24 * 60 * 60 * 1000));
     
     let currentDateTime = new Date(startDate);
     while (currentDateTime < endDate) {
       events.push(createEventFromItem(item, currentDateTime));
       currentDateTime = new Date(currentDateTime.getTime() + intervalMs);
     }
-  } else if (item.frequency.timesPerDay) {
+  } else if (item.frequency?.timesPerDay) {
     // Frequência por dia (ex: 3x/dia)
     const timesPerDay = item.frequency.timesPerDay;
     const resolvedTimes: string[] = [];
@@ -67,7 +113,7 @@ function generateEventsForItem(
       }
     }
 
-    for (let day = 0; day < item.durationDays; day++) {
+    for (let day = 0; day < durationDays; day++) {
       const currentDate = new Date(startDate);
       currentDate.setDate(startDate.getDate() + day);
 

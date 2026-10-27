@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Android notification icon: white silhouette on transparent background -->
+  <g transform="translate(256, 256) rotate(-45)" fill="#ffffff">
+    <path d="M -184,0 A 54 54 0 0 1 -130,-54 L -6,-54 L -6,54 L -130,54 A 54 54 0 0 1 -184,0 Z" />
+    <path d="M 6,-54 L 130,-54 A 54 54 0 0 1 130,54 L 6,54 Z" />
+  </g>
+</svg>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Alert, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, Alert, Platform, ActivityIndicator, Switch, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Button } from '../../../components/ui/button';
@@ -8,15 +8,31 @@ import { Badge } from '../../../components/ui/badge';
 import { Separator } from '../../../components/ui/Separator';
 import { planStore } from '../../../lib/planStore';
 import { supabase } from '../../../lib/supabase';
-import { expandPlanToEvents } from '../../../../../packages/core/src/scheduler';
+import {
+  expandPlanToEvents,
+  getPlanSchedulingIssues,
+  toEventRow,
+  CONTINUOUS_HORIZON_DAYS,
+  PlanSchedulingIssue,
+} from '../../../../../packages/core/src/scheduler';
+import { TreatmentItem, TreatmentPlan } from '../../../../../packages/core/src/types';
+import { Input } from '../../../components/ui/Input';
 import { scheduleSlidingWindowNotifications } from '../../../lib/notifications';
 import { syncEventsToNativeCalendar } from '../../../lib/calendar';
 import { Checkbox } from '../../../components/ui/Checkbox';
 import { useRouter } from 'expo-router';
 
+type FrequencyMode = 'everyHours' | 'timesPerDay';
+
 export default function ReviewPlanScreen() {
   const router = useRouter();
-  const { plan, imageBase64, startDateTime: initialStartDateTime } = planStore.getState();
+  const { plan: initialPlan, imageBase64, startDateTime: initialStartDateTime } = planStore.getState();
+  const [plan, setPlan] = useState<TreatmentPlan | null>(initialPlan);
+  // Campos que vieram faltando continuam editáveis mesmo depois de preenchidos
+  const [initialIssues] = useState<PlanSchedulingIssue[]>(() =>
+    initialPlan ? getPlanSchedulingIssues(initialPlan) : []
+  );
+  const [frequencyModes, setFrequencyModes] = useState<Record<number, FrequencyMode>>({});
   const [startDateTime, setStartDateTime] = useState<Date>(initialStartDateTime || new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -44,6 +60,44 @@ export default function ReviewPlanScreen() {
     );
   }
 
+  const issues = getPlanSchedulingIssues(plan);
+  const needsInput = (itemIndex: number, field: PlanSchedulingIssue['field']) =>
+    [...initialIssues, ...issues].some((i) => i.itemIndex === itemIndex && i.field === field);
+  const hasIssue = (itemIndex: number, field: PlanSchedulingIssue['field']) =>
+    issues.some((i) => i.itemIndex === itemIndex && i.field === field);
+
+  const updateItem = (itemIndex: number, changes: Partial<TreatmentItem>) => {
+    const updated = {
+      ...plan,
+      items: plan.items.map((item, i) => (i === itemIndex ? { ...item, ...changes } : item)),
+    };
+    setPlan(updated);
+    planStore.updateDraftPlan(updated);
+  };
+
+  const parsePositiveInt = (value: string) => {
+    const n = parseInt(value, 10);
+    return Number.isNaN(n) ? null : n;
+  };
+
+  const getFrequencyMode = (itemIndex: number, item: TreatmentItem): FrequencyMode =>
+    frequencyModes[itemIndex] ?? (item.frequency?.everyHours ? 'everyHours' : 'timesPerDay');
+
+  const updateFrequency = (itemIndex: number, mode: FrequencyMode, value: number | null) => {
+    updateItem(itemIndex, { frequency: value ? { [mode]: value } : {} });
+  };
+
+  const formatFrequency = (item: TreatmentItem) => {
+    if (item.frequency?.everyHours) return `A cada ${item.frequency.everyHours} horas`;
+    if (item.frequency?.timesPerDay) return `${item.frequency.timesPerDay}x ao dia`;
+    return 'Não informada';
+  };
+
+  const formatDuration = (item: TreatmentItem) => {
+    if (item.continuous) return 'Uso contínuo';
+    return item.durationDays ? `${item.durationDays} dias` : 'Não informada';
+  };
+
   const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
     setShowDatePicker(Platform.OS === 'ios');
     if (selectedDate) {
@@ -65,6 +119,13 @@ export default function ReviewPlanScreen() {
   };
 
   const handleConfirmAndSave = async () => {
+    // Expandir eventos antes de gravar: nunca criar tratamento sem doses
+    const events = expandPlanToEvents(plan, startDateTime);
+    if (events.length === 0) {
+      Alert.alert('Plano sem doses', 'Verifique a duração e a frequência de cada medicamento.');
+      return;
+    }
+
     setIsSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -88,14 +149,10 @@ export default function ReviewPlanScreen() {
 
       if (treatmentError) throw treatmentError;
 
-      // 2. Expandir eventos via @pill-parse-plan/core
-      const events = expandPlanToEvents(plan, startDateTime);
-
-      // 3. Inserir eventos na tabela
+      // 2. Inserir eventos na tabela (data e hora locais do usuário)
       const eventInserts = events.map((event) => ({
         treatment_id: treatment.id,
-        date: event.startISO.split('T')[0],
-        time: event.startISO.split('T')[1].split('.')[0],
+        ...toEventRow(event),
         label: event.title,
         done: false,
       }));
@@ -193,11 +250,76 @@ export default function ReviewPlanScreen() {
             )}
 
             <Text className="text-sm text-muted-foreground mb-1">
-              Frequência: {item.frequency.everyHours
-                ? `A cada ${item.frequency.everyHours} horas`
-                : `${item.frequency.timesPerDay}x ao dia`}
-              {' • '}Duração: {item.durationDays} dias
+              Frequência: {formatFrequency(item)}
+              {' • '}Duração: {formatDuration(item)}
             </Text>
+
+            {(needsInput(index, 'durationDays') || item.continuous) && (
+              <View className="mt-2 p-3 rounded-lg border border-warning/30 bg-warning/10">
+                {hasIssue(index, 'durationDays') && (
+                  <Text className="text-xs font-bold text-warning mb-2">
+                    ⚠️ Duração não informada na receita. Informe os dias ou marque uso contínuo.
+                  </Text>
+                )}
+                {!item.continuous && (
+                  <Input
+                    label="Duração (dias)"
+                    keyboardType="number-pad"
+                    value={item.durationDays ? String(item.durationDays) : ''}
+                    onChangeText={(text) => updateItem(index, { durationDays: parsePositiveInt(text) })}
+                    error={hasIssue(index, 'durationDays') ? 'Obrigatório' : undefined}
+                  />
+                )}
+                <View className="flex-row items-center justify-between mt-2">
+                  <Text className="text-sm text-foreground flex-1 mr-2">
+                    Uso contínuo (agenda para {CONTINUOUS_HORIZON_DAYS} dias)
+                  </Text>
+                  <Switch
+                    value={!!item.continuous}
+                    onValueChange={(value) => updateItem(index, { continuous: value })}
+                  />
+                </View>
+              </View>
+            )}
+
+            {needsInput(index, 'frequency') && (
+              <View className="mt-2 p-3 rounded-lg border border-warning/30 bg-warning/10">
+                {hasIssue(index, 'frequency') && (
+                  <Text className="text-xs font-bold text-warning mb-2">
+                    ⚠️ Frequência não informada na receita. Confira com seu médico e preencha.
+                  </Text>
+                )}
+                <View className="flex-row mb-2">
+                  {(['timesPerDay', 'everyHours'] as FrequencyMode[]).map((mode) => {
+                    const selected = getFrequencyMode(index, item) === mode;
+                    return (
+                      <Pressable
+                        key={mode}
+                        onPress={() => {
+                          setFrequencyModes((prev) => ({ ...prev, [index]: mode }));
+                          const current = item.frequency?.everyHours ?? item.frequency?.timesPerDay ?? null;
+                          updateFrequency(index, mode, current);
+                        }}
+                        className={`flex-1 py-2 rounded-lg border mr-2 items-center ${
+                          selected ? 'bg-primary border-primary' : 'bg-background border-border'
+                        }`}
+                      >
+                        <Text className={selected ? 'text-primary-foreground text-xs font-bold' : 'text-foreground text-xs'}>
+                          {mode === 'timesPerDay' ? 'Vezes ao dia' : 'A cada X horas'}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Input
+                  label={getFrequencyMode(index, item) === 'timesPerDay' ? 'Vezes ao dia' : 'Intervalo (horas)'}
+                  keyboardType="number-pad"
+                  value={String(item.frequency?.[getFrequencyMode(index, item)] ?? '')}
+                  onChangeText={(text) => updateFrequency(index, getFrequencyMode(index, item), parsePositiveInt(text))}
+                  error={hasIssue(index, 'frequency') ? 'Obrigatório' : undefined}
+                />
+              </View>
+            )}
 
             {item.notes && (
               <Text className="text-xs text-muted-foreground mt-1 bg-muted p-2 rounded-lg">
@@ -284,11 +406,16 @@ export default function ReviewPlanScreen() {
           variant="default"
           size="lg"
           onPress={handleConfirmAndSave}
-          disabled={isSaving}
-          className="mb-8"
+          disabled={isSaving || issues.length > 0}
+          className={issues.length > 0 ? 'mb-2' : 'mb-8'}
         >
           {isSaving ? 'Salvando Tratamento...' : 'Confirmar e Iniciar Tratamento'}
         </Button>
+        {issues.length > 0 && (
+          <Text className="text-xs text-warning text-center mb-8">
+            Preencha os campos destacados para gerar a agenda.
+          </Text>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

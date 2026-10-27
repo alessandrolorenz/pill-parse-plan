@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { TreatmentPlan, CalendarEvent } from '@/lib/types';
-import { expandPlanToEvents } from '@/lib/scheduler';
+import { expandPlanToEvents, toEventRow } from '@/lib/scheduler';
 
 export interface SupabaseTreatment {
   id: string;
@@ -64,6 +64,12 @@ export function useSupabaseTreatments() {
   ): Promise<string | null> => {
     if (!user) return null;
 
+    // Generate events first: never create a treatment without doses
+    const events = expandPlanToEvents(plan, startDateTime);
+    if (events.length === 0) {
+      throw new Error('O plano não gerou nenhuma dose. Verifique a duração e a frequência de cada item.');
+    }
+
     try {
       // Insert treatment
       const { data: treatment, error: treatmentError } = await supabase
@@ -80,14 +86,10 @@ export function useSupabaseTreatments() {
 
       if (treatmentError) throw treatmentError;
 
-      // Generate events
-      const events = expandPlanToEvents(plan, startDateTime);
-      
-      // Insert events
+      // Insert events (date/time in the user's local time)
       const eventInserts = events.map(event => ({
         treatment_id: treatment.id,
-        date: event.startISO.split('T')[0],
-        time: event.startISO.split('T')[1].split('.')[0],
+        ...toEventRow(event),
         label: event.title,
         done: false
       }));
@@ -123,17 +125,45 @@ export function useSupabaseTreatments() {
     }
   };
 
+  // Throws on failure so callers can revert optimistic updates
   const updateEventStatus = async (eventId: string, done: boolean) => {
-    try {
-      const { error } = await supabase
-        .from('events')
-        .update({ done })
-        .eq('id', eventId);
+    const { error } = await supabase
+      .from('events')
+      .update({ done })
+      .eq('id', eventId);
 
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error updating event:', error);
+    if (error) throw error;
+  };
+
+  const setTreatmentStatus = async (treatmentId: string, status: 'active' | 'archived') => {
+    const { error } = await supabase
+      .from('treatments')
+      .update({ status })
+      .eq('id', treatmentId);
+
+    if (error) throw error;
+    await loadTreatments();
+  };
+
+  // Events and reminders are removed by ON DELETE CASCADE
+  const deleteTreatment = async (treatmentId: string) => {
+    const imagePath = treatments.find(t => t.id === treatmentId)?.image_path;
+
+    const { error } = await supabase
+      .from('treatments')
+      .delete()
+      .eq('id', treatmentId);
+
+    if (error) throw error;
+
+    if (imagePath) {
+      const { error: storageError } = await supabase.storage
+        .from('prescriptions')
+        .remove([imagePath]);
+      if (storageError) console.error('Error removing prescription image:', storageError);
     }
+
+    await loadTreatments();
   };
 
   const getActiveTreatments = () => {
@@ -192,6 +222,8 @@ export function useSupabaseTreatments() {
     addTreatment,
     getTreatmentEvents,
     updateEventStatus,
+    setTreatmentStatus,
+    deleteTreatment,
     getActiveTreatments,
     getArchivedTreatments,
     uploadPrescriptionImage,

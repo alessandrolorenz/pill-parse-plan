@@ -148,7 +148,7 @@ const Index = () => {
       } else {
         toast({
           title: 'Erro na agenda',
-          description: 'Não foi possível criar o tratamento.',
+          description: error instanceof Error ? error.message : 'Não foi possível criar o tratamento.',
           variant: 'destructive'
         });
       }
@@ -172,6 +172,23 @@ const Index = () => {
   const handleViewTreatmentDetails = (treatmentId: string) => {
     setSelectedTreatmentId(treatmentId);
     setCurrentStep('schedule');
+  };
+
+  const handleTreatmentChanged = async (change: 'archived' | 'reactivated' | 'deleted') => {
+    await treatmentData.loadTreatments?.();
+    if (change !== 'reactivated') {
+      handleBackToHome();
+    }
+  };
+
+  // Reativar conta no limite de tratamentos ativos do plano gratuito
+  const canReactivateTreatment = () => {
+    const restriction = treatmentData.checkTreatmentRestriction();
+    if (!restriction.canAddTreatment) {
+      setRestrictionModal({ open: true, type: 'maxTreatments' });
+      return false;
+    }
+    return true;
   };
 
   const handleStartNewTreatment = () => {
@@ -442,6 +459,7 @@ const Index = () => {
             </div>
             <PlanReview
               plan={treatmentPlan}
+              onPlanChange={setTreatmentPlan}
               onGenerateSchedule={handleGenerateSchedule}
               startDateTime={startDateTime}
               onStartDateTimeChange={setStartDateTime}
@@ -458,10 +476,12 @@ const Index = () => {
                 Voltar ao início
               </Button>
             </div>
-        <SupabaseScheduleView 
-          treatmentId={selectedTreatmentId}
-          onBack={handleBackToHome}
-        />
+            <SupabaseScheduleView
+              treatmentId={selectedTreatmentId}
+              onBack={handleBackToHome}
+              onTreatmentChanged={handleTreatmentChanged}
+              canReactivate={canReactivateTreatment}
+            />
           </div>
         )}
       </main>
