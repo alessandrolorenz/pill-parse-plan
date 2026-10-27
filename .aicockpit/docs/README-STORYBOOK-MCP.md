@@ -1,3 +1,5 @@
+> **Status (2026-10-26):** Storybook não está instalado neste repositório (sem `.storybook/` nem dependências `storybook` no `package.json`). O servidor MCP em `http://localhost:6006/mcp` (configurado em `.mcp.json`) só funciona depois de instalar e rodar o Storybook.
+
 # Storybook MCP Server — Integration Guide
 
 > **Version**: `@storybook/addon-mcp` v0.6.0+ (requires Storybook 10.3.5 or higher)

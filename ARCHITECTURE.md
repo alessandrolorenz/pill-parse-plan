@@ -22,11 +22,11 @@ Documentação arquitetural de referência do sistema **Pills Planner**, incluin
 
 ## 1. Visão Geral e Contexto
 
-O **Pills Planner** é uma solução médica voltada à adesão farmacoterapêutica. O sistema permite ao paciente fotografar prescrições médicas manuais ou digitais, submetê-las a um extrator de visão computacional multimodal (OpenAI GPT-4o / GPT-4.1) via backend seguro (Supabase Edge Functions), gerar um cronograma de doses determinístico com tratamento de timezones e horários preferenciais, e sincronizar eventos de alarme com a web e o ecossistema móvel nativo (iOS / Android).
+O **Pills Planner** é uma solução médica voltada à adesão farmacoterapêutica. O sistema permite ao paciente fotografar prescrições médicas manuais ou digitais, submetê-las a um extrator de visão computacional multimodal (OpenAI `gpt-4.1-2025-04-14` na Edge Function; o servidor Express legado usa `gpt-4o`) via backend seguro (Supabase Edge Functions), gerar um cronograma de doses determinístico com tratamento de timezones e horários preferenciais, e sincronizar eventos de alarme com a web e o ecossistema móvel nativo (iOS / Android).
 
 ### Premissas Inegociáveis
 * **Segurança Clínica:** Nunca inferir doses ou frequências ausentes na receita. Havendo incerteza, o nível de confiança (`confidence < 1.0`) é reduzido e a interface solicita confirmação explícita ao paciente.
-* **Disclaimer Médico Obrigatório:** Exibição explícita do componente `MedicalDisclaimer` informando que o sistema não substitui orientação profissional.
+* **Disclaimer Médico Obrigatório:** Exibição explícita de um aviso informando que o sistema não substitui orientação profissional. Hoje o aviso está inline em `src/pages/Index.tsx`, `src/components/PlanReview.tsx` e `apps/mobile/app/(app)/new/review.tsx` (não há um componente `MedicalDisclaimer` compartilhado).
 * **Isomorfismo de Domínio:** O motor de expansão de plano para eventos (`scheduler.ts`) reside exclusivamente em `packages/core`, garantindo paridade matemática exata entre Web e Mobile.
 * **Acessibilidade e Consistência Visual:** Componentes fundamentados em primitivas acessíveis (Radix UI) com estilização semântica via Tailwind CSS v3.4 e variáveis de tema HSL centralizadas.
 
@@ -47,7 +47,7 @@ C4Context
     }
 
     System_Ext(supabase, "Supabase Cloud Platform", "BaaS: PostgreSQL com RLS, Autenticação JWT, Storage Privado de Receitas e Edge Functions.")
-    System_Ext(openai, "OpenAI API (GPT-4o Vision)", "Modelo multimodal de visão para extração estruturada de medicamentos (TreatmentPlan).")
+    System_Ext(openai, "OpenAI API (GPT-4.1 Vision)", "Modelo multimodal de visão para extração estruturada de medicamentos (TreatmentPlan).")
     System_Ext(calendar_ext, "Calendários Nativos (Apple / Google)", "Sincronização de eventos e alarmes via RFC-5545 iCal ou expo-calendar.")
     System_Ext(figma, "Figma Design Specs", "Fonte da verdade visual para layouts, espaçamentos, paleta de cores e protótipos de tela.")
 
@@ -67,19 +67,19 @@ Detalhamento da estrutura em monorepo (`pnpm-workspace.yaml` + Turborepo), seus 
 ```mermaid
 graph TB
     subgraph Monorepo["Monorepo (pnpm workspaces + Turborepo)"]
-        subgraph WebApp["apps/web (ou Root SPA)"]
+        subgraph WebApp["Root SPA (src/ na raiz do repo)"]
             ReactWeb["React 18.3.1 + Vite 5.4<br/>• Tailwind CSS 3.4<br/>• Radix UI + CVA<br/>• Lucide React Icons<br/>• React Router v6"]
         end
 
         subgraph MobileApp["apps/mobile"]
-            ExpoApp["React Native 0.85 + Expo SDK 56<br/>• Expo Router (File-based)<br/>• NativeWind v4<br/>• expo-notifications (Local)<br/>• expo-calendar<br/>• planStore (Zustand)"]
+            ExpoApp["React Native 0.85 + Expo SDK 56<br/>• Expo Router (File-based)<br/>• NativeWind v4<br/>• expo-notifications (Local)<br/>• expo-calendar<br/>• planStore (store em memória do rascunho)"]
         end
 
         subgraph CorePackage["packages/core (Biblioteca Isomórfica)"]
             CoreTypes["Domain Types<br/>(TreatmentPlan, CalendarEvent, TreatmentItem)"]
             Scheduler["Scheduler Engine<br/>(expandPlanToEvents, timezone-safe)"]
             SupabaseShared["Supabase Client & Types"]
-            OpenAIExtractor["OpenAI Prompt & Validation"]
+            OpenAIExtractor["extractPlanFromImageWithClient()<br/>(cliente da Edge Function)"]
         end
     end
 
@@ -93,11 +93,12 @@ graph TB
         SupabaseAuth["Supabase Auth (JWT, Google OAuth, Email)"]
         PostgresDB["PostgreSQL 15+ com RLS<br/>• users<br/>• treatments<br/>• events<br/>• notification_reminders<br/>• push_subscriptions"]
         PrescriptionsBucket["Storage Bucket 'prescriptions' (Privado)"]
-        EdgeFunctions["Deno Edge Functions<br/>• analyze-prescription<br/>• openai-status"]
+        EdgeFunctions["Deno Edge Functions<br/>• analyze-prescription (prompt médico)<br/>• openai-status"]
+        ExpressLegacy["Servidor Express legado (server.js)<br/>• /api/openai/*<br/>• /api/push/subscribe<br/>• /api/notifications/schedule<br/>• cron de envio de push"]
     end
 
     subgraph ExternalAI["Provedores Externos"]
-        OpenAIService["OpenAI API (GPT-4o Vision)"]
+        OpenAIService["OpenAI API (GPT-4.1 Vision)"]
     end
 
     %% Dependências de Pacotes
@@ -119,6 +120,8 @@ graph TB
     ExpoApp -->|Chamada de IA via Edge| EdgeFunctions
 
     EdgeFunctions -->|Proxy Seguro com Chave Privada| OpenAIService
+    ReactWeb -->|Web Push via /api (proxy Vite)| ExpressLegacy
+    ExpressLegacy -->|Rota legada /api/openai| OpenAIService
     EdgeFunctions -->|Validação de Usuário| SupabaseAuth
     PostgresDB --- PrescriptionsBucket
 ```
@@ -216,7 +219,7 @@ graph TD
     end
 
     subgraph MobileServices["Serviços Nativos & Estado Local"]
-        PlanStore["planStore.ts (Zustand Cache Offline)"]
+        PlanStore["planStore.ts (rascunho do plano em memória, sem persistência)"]
         NativeNotifications["notifications.ts (expo-notifications / Alarmes Locais)"]
         NativeCalendar["calendar.ts (expo-calendar / Integração OS)"]
         MobileSupabase["lib/supabase.ts (Supabase Client Mobile)"]
@@ -237,7 +240,7 @@ graph TD
     AppGroup --> NativeCalendar
     AppGroup --> MobileSupabase
 
-    PlanStore --> CoreSchedulerMobile
+    AppGroup -->|new/review.tsx| CoreSchedulerMobile
     PlanStore --> CoreTypesMobile
     NativeNotifications --> CoreTypesMobile
 ```
@@ -265,8 +268,7 @@ graph LR
         end
 
         subgraph OpenAICore["openai.ts"]
-            SystemPrompt["SYSTEM_PROMPT (Instruções médicas estritas)"]
-            ParsePlan["parsePlanResponse() (Validação e sanitização JSON)"]
+            ExtractPlan["extractPlanFromImageWithClient() (invoca a Edge Function analyze-prescription; o prompt médico e a validação ficam na Edge Function)"]
         end
 
         subgraph SupabaseCore["supabase/"]
@@ -294,17 +296,17 @@ sequenceDiagram
     actor Paciente as Paciente / Cuidador
     participant App as App (Web / Mobile)
     participant Edge as Supabase Edge Function (analyze-prescription)
-    participant OpenAI as OpenAI Vision (GPT-4o)
+    participant OpenAI as OpenAI Vision (GPT-4.1)
     participant Core as packages/core (Scheduler Engine)
     participant DB as Supabase PostgreSQL & Storage
     participant Alarm as Motor de Notificações (Local / Web Push)
 
     Paciente->>App: 1. Fotografa / Seleciona imagem da receita
-    App->>DB: 2. Upload para bucket privado 'prescriptions'
+    App->>DB: 2. Upload para bucket privado 'prescriptions' (somente Web; o Mobile ainda não envia a imagem)
     DB-->>App: 3. Retorna imagePath seguro
     
     App->>Edge: 4. POST /analyze-prescription (imageBase64, userNotes)
-    Note over Edge: Valida JWT e injeta OPENAI_API_KEY das variáveis de ambiente
+    Note over Edge: JWT verificado pelo gateway do Supabase (verify_jwt padrão); a função lê OPENAI_API_KEY dos secrets
     Edge->>OpenAI: 5. Chat Completion com prompt médico especializado
     OpenAI-->>Edge: 6. Retorna JSON bruto estruturado
     Note over Edge: Sanitiza, valida campos e índice de confiança (0..1)
@@ -323,7 +325,7 @@ sequenceDiagram
     App->>DB: 14. BATCH INSERT into events (treatment_id, date, time, label, done)
     
     App->>Alarm: 15. Agenda lembretes locais / push para cada dose
-    App->>Paciente: 16. Exibe Agenda de Tratamento (AgendaTratamento) com progresso ativo
+    App->>Paciente: 16. Exibe a agenda do tratamento (SupabaseScheduleView) com progresso ativo
 ```
 
 ---
@@ -448,6 +450,8 @@ erDiagram
 
 Pipeline determinístico de 12 etapas com auditoria de conformidade para prevenir regressões de layout, tokens e código.
 
+> **Nota:** os agentes abaixo (`ui-orchestrator`, `spec-refiner`, `design-completeness`, etc.) descrevem o processo do AI Cockpit e não estão definidos neste repositório. O que existe aqui são as skills em `.claude/skills/` (importadas de `.aicockpit/skills/`), o comando `/create-specs` e o template em `_specs/`.
+
 ```mermaid
 flowchart TD
     Demanda["Demanda do Usuário / Issue de UI"] --> Master["ui-orchestrator (Master Agent no Board)"]
@@ -474,7 +478,7 @@ flowchart TD
     end
 
     subgraph QualityGate["Quality Gate Determinístico"]
-        TSC["pnpm exec tsc --noEmit (0 erros em Web, Core e Mobile)"]
+        TSC["tsc --noEmit -p tsconfig.app.json / -p packages/core / -p apps/mobile (0 erros)"]
         ESLint["pnpm run lint (0 warnings/erros)"]
         Vitest["pnpm test (100% testes aprovados)"]
         BuildCheck["pnpm run build (Build de produção Vite)"]
@@ -501,15 +505,15 @@ flowchart TD
 
 ## 11. Matriz Comparativa Multiplataforma: Web vs. Mobile
 
-| Capacidade | Aplicação Web (`apps/web` / root) | Aplicação Mobile (`apps/mobile`) | Motor de Compartilhamento |
+| Capacidade | Aplicação Web (raiz do repo, `src/`) | Aplicação Mobile (`apps/mobile`) | Motor de Compartilhamento |
 |---|---|---|---|
 | **Ambiente de Execução** | Browser Desktop & Mobile | iOS e Android Nativo | JavaScript/TypeScript V8/Hermes |
-| **Framework Base** | React 18.3.1 + Vite 5.4.19 | React Native 0.85 + Expo SDK 56 | TypeScript 5.8 |
+| **Framework Base** | React 18.3.1 + Vite 5.4.19 | React Native 0.85 + React 19 + Expo SDK 56 | TypeScript 5.8 |
 | **Navegação** | `react-router-dom` v6 | `expo-router` (File-based) | — |
 | **Estilização** | Tailwind CSS v3.4 + Variáveis CSS (:root HSL) | NativeWind v4 + Tailwind CSS | Paleta Semântica HSL |
 | **Biblioteca de UI** | Radix UI + Tailwind CSS (CVA) | Componentes Nativos (NativeWind) | Contrato de Props e Variantes |
-| **Notificações** | Web Push API (Service Worker) | `expo-notifications` (Alarmes locais nativos) | Tipos de Payload de Lembrete |
+| **Notificações** | Web Push API (Service Worker `public/sw.js` + servidor Express `server.js`) | `expo-notifications` (Alarmes locais nativos) | Tipos de Payload de Lembrete |
 | **Calendário** | Exportação de arquivo `.ics` | `expo-calendar` (Gravação direta no app Nativo) | Gerador de Eventos RFC-5545 |
 | **Captura de Imagem** | Input File HTML5 / Drag & Drop | Câmera nativa e Galeria de Fotos | Conversão base64 e envio seguro |
 | **Regras de Negócio** | Consome `packages/core` | Consome `packages/core` | `packages/core/src/scheduler.ts` |
-| **Armazenamento Offline** | `localStorage` / React Query cache | `AsyncStorage` / `planStore.ts` | Modelos de dados em `types.ts` |
+| **Armazenamento Offline** | `localStorage` / React Query cache | `AsyncStorage` (apenas sessão do Supabase); `planStore.ts` mantém só o rascunho em memória | Modelos de dados em `types.ts` |
