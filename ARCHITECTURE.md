@@ -306,7 +306,7 @@ sequenceDiagram
     DB-->>App: 3. Retorna imagePath seguro
     
     App->>Edge: 4. POST /analyze-prescription (imageBase64, userNotes)
-    Note over Edge: JWT verificado pelo gateway do Supabase (verify_jwt padrão); a função lê OPENAI_API_KEY dos secrets
+    Note over Edge: verify_jwt está desligado (a função aceita chamadas sem JWT); lê OPENAI_API_KEY dos secrets
     Edge->>OpenAI: 5. Chat Completion com prompt médico especializado
     OpenAI-->>Edge: 6. Retorna JSON bruto estruturado
     Note over Edge: Sanitiza, valida campos e índice de confiança (0..1)
